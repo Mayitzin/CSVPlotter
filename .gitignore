@@ -1,0 +1,7 @@
+# ignore all executables
+*.exe
+*.out
+*.o
+
+# ignore the PyCharm .idea folder
+.idea/

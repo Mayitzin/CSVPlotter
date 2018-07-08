@@ -72,6 +72,20 @@ class MainWindow(QtWidgets.QMainWindow):
             with open(fileName, 'r') as f:
                 read_data = f.readlines()
             # Read Headers (remove leading white spaces) and Store data in an array
+            if skip_N > 1:
+                # new_headers = []
+                for line in read_data[:skip_N]:
+                    split_line = line.strip().split(';')
+                    new_headers = split_line
+                    for index in range(len(new_headers)):
+                        if len(new_headers[index])<1:
+                            new_headers[index] = new_headers[index-1]
+                    # for index in range(len(split_line)):
+                    #     if len(split_line[index])>0:
+                    #         new_headers.append(split_line[index])
+                    #     else:
+                    #         new_headers.append(split_line[index-1])
+                    print(new_headers)
             [headers.append(header.lstrip()) for header in read_data[0].strip().split(';')]
             [data.append( line.strip().split(';') ) for line in read_data[skip_N:]]    # Skip the first N lines
             data = np.array(data, dtype=data_type)

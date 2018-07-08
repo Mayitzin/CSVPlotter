@@ -18,11 +18,11 @@ and their derived computations (position, velocity, orientation, etc.)
 + [PyQtGraph](http://pyqtgraph.org/) is the main plotting library for better speed.
 + Inclusion of [matplotlib](https://matplotlib.org/) as alternative for pretty plots.
 + ToDo:
-    - Identify headers of more than one line.
-    - Select format of lines (color, shape, etc.)
-    - Select files to plot.
-    - Select elements of file to plot.  
-    - Test with [vtk](https://www.vtk.org/features-language-agnostic/) wrapper.
+    - [ ] Identify and re-label headers of more than one line.
+    - [ ] Select format of lines (color, shape, etc.)
+    - [ ] Select files to plot.
+    - [ ] Select elements of file to plot.  
+    - [ ] Test with [vtk](https://www.vtk.org/features-language-agnostic/) wrapper.
 
 **C++**
 

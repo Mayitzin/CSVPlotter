@@ -24,7 +24,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setupWidgets()
 
-        all_data, headers = self.getData(test_file, 2)
+        all_data, headers = self.getData(test_file)
         self.plotData(all_data, headers, [1, 2, 3])
 
 
@@ -53,7 +53,7 @@ class MainWindow(QtWidgets.QMainWindow):
         return headers
 
 
-    def getData(self, fileName, skip_N=1, data_type='float'):
+    def getData(self, fileName, data_type='float'):
         """getData reads the data stored in a CSV file, returns a numPy array of
         its contents and a list of its headers.
 
@@ -71,28 +71,40 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             with open(fileName, 'r') as f:
                 read_data = f.readlines()
+            row_count = self.countHeaders(read_data)
             # Read Headers (remove leading white spaces) and Store data in an array
-            if skip_N > 1:
-                # new_headers = []
-                for line in read_data[:skip_N]:
+            if row_count > 1:
+                all_headers = []
+                for line in read_data[:row_count]:
                     split_line = line.strip().split(';')
-                    new_headers = split_line
-                    for index in range(len(new_headers)):
-                        if len(new_headers[index])<1:
-                            new_headers[index] = new_headers[index-1]
-                    # for index in range(len(split_line)):
-                    #     if len(split_line[index])>0:
-                    #         new_headers.append(split_line[index])
-                    #     else:
-                    #         new_headers.append(split_line[index-1])
-                    print(new_headers)
-            [headers.append(header.lstrip()) for header in read_data[0].strip().split(';')]
-            [data.append( line.strip().split(';') ) for line in read_data[skip_N:]]    # Skip the first N lines
+                    temp_header = split_line
+                    for index in range(len(split_line)):
+                        if len(temp_header[index])<1:
+                            temp_header[index] = temp_header[index-1]
+                    all_headers.append(temp_header)
+                new_headers = []
+                [ new_headers.append('_'.join(h)) for h in list(map(list, zip(*all_headers))) ]
+                print(new_headers)
+                headers = new_headers
+            else:
+                [headers.append(header.lstrip()) for header in read_data[0].strip().split(';')]
+            [data.append( line.strip().split(';') ) for line in read_data[row_count:]]    # Skip the first N lines
             data = np.array(data, dtype=data_type)
         except:
             data = np.array([], dtype=data_type)
         return data, headers
 
+    def countHeaders(self, data_lines=[]):
+        row_count = 0
+        for line in data_lines:
+            elements_array = []
+            for element in line.strip().split(';'):
+                elements_array.append(self.isfloat(element))
+            if not all(elements_array):
+                row_count += 1
+            else:
+                break
+        return row_count
 
     def isfloat(self, value):
         try:

@@ -53,6 +53,20 @@ class MainWindow(QtWidgets.QMainWindow):
         return headers
 
 
+    def mergeHeaders(self, header_lines):
+        all_headers = []
+        for line in header_lines:
+            split_line = line.strip().split(';')
+            temp_header = split_line
+            for index in range(len(split_line)):
+                if len(temp_header[index])<1:
+                    temp_header[index] = temp_header[index-1]
+            all_headers.append(temp_header)
+        new_headers = []
+        [ new_headers.append('_'.join(h)) for h in list(map(list, zip(*all_headers))) ]
+        return new_headers
+
+
     def getData(self, fileName, data_type='float'):
         """getData reads the data stored in a CSV file, returns a numPy array of
         its contents and a list of its headers.
@@ -71,24 +85,14 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             with open(fileName, 'r') as f:
                 read_data = f.readlines()
-            row_count = self.countHeaders(read_data)
-            # Read Headers (remove leading white spaces) and Store data in an array
-            if row_count > 1:
-                all_headers = []
-                for line in read_data[:row_count]:
-                    split_line = line.strip().split(';')
-                    temp_header = split_line
-                    for index in range(len(split_line)):
-                        if len(temp_header[index])<1:
-                            temp_header[index] = temp_header[index-1]
-                    all_headers.append(temp_header)
-                new_headers = []
-                [ new_headers.append('_'.join(h)) for h in list(map(list, zip(*all_headers))) ]
-                print(new_headers)
-                headers = new_headers
+            # Read and store Headers in a list of strings
+            header_rows = self.countHeaders(read_data)
+            if header_rows > 1:
+                headers = self.mergeHeaders(read_data[:header_rows])
             else:
                 [headers.append(header.lstrip()) for header in read_data[0].strip().split(';')]
-            [data.append( line.strip().split(';') ) for line in read_data[row_count:]]    # Skip the first N lines
+            # Read and store the data in a NumPy array
+            [data.append( line.strip().split(';') ) for line in read_data[header_rows:]]    # Skip the first N lines
             data = np.array(data, dtype=data_type)
         except:
             data = np.array([], dtype=data_type)

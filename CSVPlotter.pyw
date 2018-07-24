@@ -25,7 +25,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setupWidgets()
 
         all_data, headers = self.getData(test_file)
-        self.plotData(all_data, headers, [1, 2, 3])
+        labels2find = ['IMU Gyroscope_X', 'IMU Gyroscope_Y', 'IMU Gyroscope_Z']
+        indices = self.getIndices(headers, labels2find)
+        self.plotData(all_data, headers, indices)
 
 
     def setupWidgets(self):
@@ -63,8 +65,16 @@ class MainWindow(QtWidgets.QMainWindow):
                     temp_header[index] = temp_header[index-1]
             all_headers.append(temp_header)
         new_headers = []
-        [ new_headers.append('_'.join(h)) for h in list(map(list, zip(*all_headers))) ]
+        [ new_headers.append('_'.join(h).strip('_')) for h in list(map(list, zip(*all_headers))) ]
         return new_headers
+
+
+    def getIndices(self, all_headers, requested_headers):
+        found_headers = []
+        for header in requested_headers:
+            if header in all_headers:
+                found_headers.append(all_headers.index(header))
+        return found_headers
 
 
     def getData(self, fileName, data_type='float'):
@@ -98,6 +108,7 @@ class MainWindow(QtWidgets.QMainWindow):
             data = np.array([], dtype=data_type)
         return data, headers
 
+
     def countHeaders(self, data_lines=[]):
         row_count = 0
         for line in data_lines:
@@ -109,6 +120,7 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 break
         return row_count
+
 
     def isfloat(self, value):
         try:
@@ -136,7 +148,7 @@ class MainWindow(QtWidgets.QMainWindow):
         plot_widget.plot(data, pen=pen_style, symbol=symbol_style, symbolPen=None, symbolSize=4, symbolBrush=color, name="Curve")
 
 
-    def plotData(self, data, file_headers, data2plot=[0], mask="", plot_options="0111111", clearPlot=True):
+    def plotData(self, data, file_headers, data2plot=[], mask="", plot_options="0111111", clearPlot=True):
         """This function takes a numPy array of size M x 3, and plots its
         contents in the main PlotWidget using pyQtGraph.
         """
@@ -147,10 +159,10 @@ class MainWindow(QtWidgets.QMainWindow):
             # Set and start Plotting Widget
             self.graphicsView.clear()
         try:
-            for elem in data2plot:
-                # used_colors = self.selectColor(num_headers, colors[elem])
-                line_data = data[:,elem]
-                self.plotDataLine(self.graphicsView, line_data, lineStyle, colors[elem])
+            used_colors = colors[:len(data2plot)]
+            for index in range(len(data2plot)):
+                line_data = data[:,data2plot[index]]
+                self.plotDataLine(self.graphicsView, line_data, lineStyle, used_colors[index])
             # Allow resizing stretching axes
             self.graphicsView.getViewBox().setAspectLocked(lock=False)
             self.graphicsView.autoRange()

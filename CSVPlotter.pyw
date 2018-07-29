@@ -3,12 +3,23 @@
 @author: Mario Garcia
 """
 
+import os
 import sys
 import numpy as np
 from PyQt5 import QtGui, uic, QtWidgets, QtCore
-# from PyQt5.QtCore import pyqtSlot
+from PyQt5.QtCore import pyqtSlot
 
+# Using module 'rigidbody' from repository 'Robotics' to compute Orientations
+sys.path.insert(0, '../Robotics/Motion')
+import rigidbody as rb
+
+base_path = "./data"
 test_file = "./data/TStick_Test02_Trial1.csv"
+
+labels = {"Accelerometers":['IMU Acceleration_X', 'IMU Acceleration_Y', 'IMU Acceleration_Z'],
+          "Gyroscopes":['IMU Gyroscope_X', 'IMU Gyroscope_Y', 'IMU Gyroscope_Z'],
+          "Magnetometers":['IMU Magnetometer_X', 'IMU Magnetometer_Y', 'IMU Magnetometer_Z'],
+          "Quaternions":['Vicon Orientation_W', 'Vicon Orientation_X', 'Vicon Orientation_Y', 'Vicon Orientation_Z']}
 
 plotting_options = ["Grid-X","Label-X","Values-X","Grid-Y","Label-Y","Values-Y","ShowTitle"]
 # Set default List of Colors
@@ -23,22 +34,104 @@ class MainWindow(QtWidgets.QMainWindow):
         # Remove QBasicTimer error by ensuring Application quits at right time.
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setupWidgets()
+        self.file2use = ""
+        self.update_tableWidget()
 
-        all_data, headers = self.getData(test_file)
-        labels2find = ['IMU Gyroscope_X', 'IMU Gyroscope_Y', 'IMU Gyroscope_Z']
-        indices = self.getIndices(headers, labels2find)
-        self.plotData(all_data, headers, indices)
+
+    """ ========================== SIGNALED FUNCTIONS ==========================
+    """
+    @pyqtSlot()
+    def on_tableWidget_itemSelectionChanged(self):
+        row = self.tableWidget.currentRow()
+        if row>-1:
+            self.file2use = self.tableWidget.item(row,0).text()
+            path2file = os.path.normpath(os.path.join(base_path, self.file2use))
+            all_data, all_headers = self.getData(path2file)
+            labels2find = list(labels.keys())
+            indices = []
+            [ indices.append(self.getIndices(all_headers, labels[labels2find[idx]])) for idx in range(len(labels2find)) ]
+            acc = all_data[:,indices[0]]
+            gyr = all_data[:,indices[1]]
+            mag = all_data[:,indices[2]]
+            qts = all_data[:,indices[3]]
+            self.plotData(self.graphicsView, acc)
+            self.plotData(self.graphicsView_2, gyr)
+            self.plotData(self.graphicsView_3, mag)
+            self.plotData(self.graphicsView_4, qts)
+            # Compute and Plot Quaternions
+            beta = 0.0029
+            q = self.estimatePose(acc, gyr, mag, "MadgwickMARG", [beta, 100.0])
+            self.plotData(self.graphicsView_5, q)
+            mse_errors = self.getMSE(qts, q)
+            self.plotData(self.graphicsView_6, mse_errors)
+            mse_sum = np.mean(np.mean(mse_errors))
+            print("MSE_error(%f) = %e" % (beta,mse_sum))
+
+
+    def estimatePose(self, acc, gyr, mag, algo='MadgwickMARG', params=[]):
+        """estimatePose computes the Orientation of the frame, given the IMU data
+        """
+        num_samples = np.shape(acc)[0]
+        q = []
+        if num_samples<1:
+            return np.array(q)
+        if algo=="MadgwickMARG":
+            beta, freq = 0.01, 100.0
+            if len(params)>1:
+                freq = params[1]
+            if len(params)>0:
+                beta = params[0]
+            # Initial Pose is estimated with Accelerometer
+            q = [ np.array(rb.am2q(acc[0])) ]
+            for i in range(1,num_samples):
+                q.append( rb.Madgwick.updateMARG(acc[i,:], gyr[i,:], mag[i,:], q[-1], beta, freq) )
+        elif algo=="Gravity":
+            for i in range(num_samples):
+                q.append( rb.am2q(acc[i,:]) )
+        elif algo=="IMU":
+            for i in range(num_samples):
+                q.append( rb.am2q(acc[i,:], mag[i,:]) )
+        return np.array(q)
+
+
+    def getMSE(self, ref_values, values):
+        num_samples = np.shape(values)[0]
+        num_labels = np.shape(values)[1]
+        mse = []
+        for j in range(num_labels):
+            line_errors = []
+            for i in range(num_samples):
+                line_errors.append( (values[i,j]-ref_values[i,j])**2 )
+            mse.append(line_errors)
+        mse_errors = np.array(mse) / num_samples
+        return np.transpose(mse_errors)
 
 
     def setupWidgets(self):
         self.plot_settings = dict.fromkeys(plotting_options, True)
-        self.setupPlotWidget()
+        self.setupPlotWidgets()
 
 
-    def setupPlotWidget(self):
-        self.graphicsView.setBackground(background=None)
+    def setupPlotWidgets(self):
+        # self.graphicsView.setBackground(background=None)
         self.graphicsView.setAntialiasing(True)
+        # self.graphicsView_2.setBackground(background=None)
+        self.graphicsView_2.setAntialiasing(True)
+        # self.graphicsView_3.setBackground(background=None)
+        self.graphicsView_3.setAntialiasing(True)
+        # self.graphicsView_4.setBackground(background=None)
+        self.graphicsView_4.setAntialiasing(True)
 
+
+    def update_tableWidget(self):
+        found_files = os.listdir(base_path)
+        num_files = len(found_files)
+        self.tableWidget.setRowCount(num_files)
+        for row in range(num_files):
+            self.tableWidget.setItem(row, 0, QtGui.QTableWidgetItem(found_files[row]))
+
+
+    ## ============ DATA HANDLING FUNCTIONS ============
 
     def getHeaders(self, fileName):
         """This function reads the headers stored in the first line of a CSV
@@ -65,7 +158,10 @@ class MainWindow(QtWidgets.QMainWindow):
                     temp_header[index] = temp_header[index-1]
             all_headers.append(temp_header)
         new_headers = []
-        [ new_headers.append('_'.join(h).strip('_')) for h in list(map(list, zip(*all_headers))) ]
+        for h in list(map(list, zip(*all_headers))):
+            new_label = '_'.join(h).strip('_')
+            if new_label not in new_headers:
+                new_headers.append(new_label)
         return new_headers
 
 
@@ -86,8 +182,8 @@ class MainWindow(QtWidgets.QMainWindow):
         Returns:
 
         data        is an array of the size M-by-N, where M is the number of
-                    observations and N is the number of observed elements
-                    (headers, or columns).
+                    samples and N is the number of observed elements (headers or
+                    columns.)
         headers     is a list of strings with the headers in the file. It is
                     also of size N.
         """
@@ -148,26 +244,27 @@ class MainWindow(QtWidgets.QMainWindow):
         plot_widget.plot(data, pen=pen_style, symbol=symbol_style, symbolPen=None, symbolSize=4, symbolBrush=color, name="Curve")
 
 
-    def plotData(self, data, file_headers, data2plot=[], mask="", plot_options="0111111", clearPlot=True):
+    def plotData(self, plotWidget, data, data2plot=[], clearPlot=True):
         """This function takes a numPy array of size M x 3, and plots its
         contents in the main PlotWidget using pyQtGraph.
         """
         lineStyle = "Line"
         current_settings = self.plot_settings.copy()
-        num_headers = len(file_headers)
+        if len(data2plot)<1:
+            data2plot = list(range(np.shape(data)[1]))
         if clearPlot:
-            # Set and start Plotting Widget
-            self.graphicsView.clear()
+            plotWidget.clear()
         try:
             used_colors = colors[:len(data2plot)]
+            if len(data2plot)==4:
+                used_colors = [colors[6]] + colors[:len(data2plot)]
             for index in range(len(data2plot)):
                 line_data = data[:,data2plot[index]]
-                self.plotDataLine(self.graphicsView, line_data, lineStyle, used_colors[index])
-            # Allow resizing stretching axes
-            self.graphicsView.getViewBox().setAspectLocked(lock=False)
-            self.graphicsView.autoRange()
+                self.plotDataLine(plotWidget, line_data, lineStyle, used_colors[index])
+            plotWidget.getViewBox().setAspectLocked(lock=False)
+            plotWidget.autoRange()
             # Add Grid
-            self.graphicsView.showGrid(x=current_settings["Grid-X"], y=current_settings["Grid-Y"])
+            plotWidget.showGrid(x=current_settings["Grid-X"], y=current_settings["Grid-Y"])
         except:
             QtGui.QMessageBox.warning(self, "Invalid File", "The selected file does not have valid data.")
         self.plot_settings = current_settings.copy()

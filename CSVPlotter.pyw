@@ -8,6 +8,7 @@ import sys
 import numpy as np
 from PyQt5 import QtGui, uic, QtWidgets, QtCore
 from PyQt5.QtCore import pyqtSlot
+import pyqtgraph as pg
 
 # Using module 'rigidbody' from repository 'Robotics' to compute Orientations
 sys.path.insert(0, '../Robotics/Motion')
@@ -36,6 +37,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setupWidgets()
         self.file2use = ""
         self.update_tableWidget()
+        self.all_data, self.indices = [], []
 
 
     """ ========================== SIGNALED FUNCTIONS ==========================
@@ -46,65 +48,33 @@ class MainWindow(QtWidgets.QMainWindow):
         if row>-1:
             self.file2use = self.tableWidget.item(row,0).text()
             path2file = os.path.normpath(os.path.join(base_path, self.file2use))
-            all_data, all_headers = self.getData(path2file)
+            self.all_data, all_headers = self.getData(path2file)
             labels2find = list(labels.keys())
-            indices = []
-            [ indices.append(self.getIndices(all_headers, labels[labels2find[idx]])) for idx in range(len(labels2find)) ]
-            acc = all_data[:,indices[0]]
-            gyr = all_data[:,indices[1]]
-            mag = all_data[:,indices[2]]
-            qts = all_data[:,indices[3]]
+            self.indices = []
+            [ self.indices.append(self.getIndices(all_headers, labels[labels2find[idx]])) for idx in range(len(labels2find)) ]
+            acc = self.all_data[:,self.indices[0]]
+            gyr = self.all_data[:,self.indices[1]]
+            mag = self.all_data[:,self.indices[2]]
+            qts = self.all_data[:,self.indices[3]]
             self.plotData(self.graphicsView, acc)
             self.plotData(self.graphicsView_2, gyr)
             self.plotData(self.graphicsView_3, mag)
             self.plotData(self.graphicsView_4, qts)
+            # Get and Plot Shadow
+            self.updateLookupGraph(acc)
             # Compute and Plot Quaternions
             beta = 0.0029
-            q = self.estimatePose(acc, gyr, mag, "MadgwickMARG", [beta, 100.0])
-            self.plotData(self.graphicsView_5, q)
+            # q = self.estimatePose(acc, gyr, mag, "MadgwickIMU", [beta, 100.0])
+            q = self.estimatePose(acc, gyr, mag, "MahonyMARG", [0.1, 0.5, 100])
             mse_errors = self.getMSE(qts, q)
+            self.plotData(self.graphicsView_5, q)
             self.plotData(self.graphicsView_6, mse_errors)
             mse_sum = np.mean(np.mean(mse_errors))
             print("MSE_error(%f) = %e" % (beta,mse_sum))
 
-
-    def estimatePose(self, acc, gyr, mag, algo='MadgwickMARG', params=[]):
-        """estimatePose computes the Orientation of the frame, given the IMU data
-        """
-        num_samples = np.shape(acc)[0]
-        q = []
-        if num_samples<1:
-            return np.array(q)
-        if algo=="MadgwickMARG":
-            beta, freq = 0.01, 100.0
-            if len(params)>1:
-                freq = params[1]
-            if len(params)>0:
-                beta = params[0]
-            # Initial Pose is estimated with Accelerometer
-            q = [ np.array(rb.am2q(acc[0])) ]
-            for i in range(1,num_samples):
-                q.append( rb.Madgwick.updateMARG(acc[i,:], gyr[i,:], mag[i,:], q[-1], beta, freq) )
-        elif algo=="Gravity":
-            for i in range(num_samples):
-                q.append( rb.am2q(acc[i,:]) )
-        elif algo=="IMU":
-            for i in range(num_samples):
-                q.append( rb.am2q(acc[i,:], mag[i,:]) )
-        return np.array(q)
-
-
-    def getMSE(self, ref_values, values):
-        num_samples = np.shape(values)[0]
-        num_labels = np.shape(values)[1]
-        mse = []
-        for j in range(num_labels):
-            line_errors = []
-            for i in range(num_samples):
-                line_errors.append( (values[i,j]-ref_values[i,j])**2 )
-            mse.append(line_errors)
-        mse_errors = np.array(mse) / num_samples
-        return np.transpose(mse_errors)
+    @pyqtSlot(QtGui.QKeyEvent)
+    def on_graphicsView_keyPressEvent(self):
+        print("graphicsView was clicked")
 
 
     def setupWidgets(self):
@@ -115,12 +85,54 @@ class MainWindow(QtWidgets.QMainWindow):
     def setupPlotWidgets(self):
         # self.graphicsView.setBackground(background=None)
         self.graphicsView.setAntialiasing(True)
+        self.graphicsView.showAxis('bottom', False)
         # self.graphicsView_2.setBackground(background=None)
         self.graphicsView_2.setAntialiasing(True)
+        self.graphicsView_2.showAxis('bottom', False)
         # self.graphicsView_3.setBackground(background=None)
         self.graphicsView_3.setAntialiasing(True)
+        self.graphicsView_3.showAxis('bottom', False)
         # self.graphicsView_4.setBackground(background=None)
         self.graphicsView_4.setAntialiasing(True)
+        self.graphicsView_4.showAxis('bottom', False)
+        self.setupLookupGraph()
+
+
+    def setupLookupGraph(self):
+        self.graphicsView_7.setAntialiasing(True)
+        self.graphicsView_7.showLabel('bottom', False)
+        self.graphicsView_7.showLabel('left', False)
+        self.graphicsView_7.showAxis('bottom', True)
+        self.graphicsView_7.showAxis('left', False)
+        self.graphicsView_7.setTitle(None)
+        self.graphicsView_7.setMouseEnabled(x=False, y=False)
+        # Add region
+        region = pg.LinearRegionItem()
+        region.setZValue(10)
+        region.sigRegionChanged.connect(lambda: self.updateCoords(region))
+        # Add ROI to Plot Widget
+        self.graphicsView_7.addItem(region, ignoreBounds=True)
+
+
+    def updateLookupGraph(self, data):
+        # Get and Plot Shadow
+        shadow = self.getDataShadow(data)
+        x_axis = range(np.shape(shadow)[0])
+        upper_line = pg.PlotDataItem(x_axis, shadow[:,0])
+        lower_line = pg.PlotDataItem(x_axis, shadow[:,1])
+        filled_plot = pg.FillBetweenItem(upper_line, lower_line, brush=(100,100,100,200))
+        self.graphicsView_7.addItem(filled_plot)
+
+    def updateCoords(self, region):
+        if len(self.all_data)>0:
+            minX, maxX = region.getRegion()
+            if minX<0:
+                minX = 0
+            ROI = [int(minX), int(maxX)]
+            self.plotData(self.graphicsView, self.all_data[ROI[0]:ROI[1],self.indices[0]])
+            self.plotData(self.graphicsView_2, self.all_data[ROI[0]:ROI[1],self.indices[1]])
+            self.plotData(self.graphicsView_3, self.all_data[ROI[0]:ROI[1],self.indices[2]])
+            self.plotData(self.graphicsView_4, self.all_data[ROI[0]:ROI[1],self.indices[3]])
 
 
     def update_tableWidget(self):
@@ -132,6 +144,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     ## ============ DATA HANDLING FUNCTIONS ============
+    def getDataShadow(self, data):
+        num_rows = np.shape(data)[0]
+        shadow = np.linalg.norm(data, axis=1).reshape((num_rows,1))
+        shadow = np.abs(shadow - np.mean(shadow[:10])) # Remove bias (mean of first lines)
+        shadow = np.hstack((shadow, -shadow))
+        return shadow
+
 
     def getHeaders(self, fileName):
         """This function reads the headers stored in the first line of a CSV
@@ -203,6 +222,67 @@ class MainWindow(QtWidgets.QMainWindow):
         except:
             data = np.array([], dtype=data_type)
         return data, headers
+
+
+    def estimatePose(self, acc, gyr, mag, algo='MadgwickMARG', params=[]):
+        """estimatePose computes the Orientation of the frame, given the IMU data
+        """
+        num_samples = np.shape(acc)[0]
+        q = []
+        if num_samples<1:
+            return np.array(q)
+        if algo.startswith("Madgwick"):
+            beta, freq = 0.01, 100.0
+            if len(params)>1:
+                freq = params[1]
+            if len(params)>0:
+                beta = params[0]
+            # Initial Pose is estimated with Accelerometer
+            q = [ np.array(rb.am2q(acc[0])) ]
+            # Choose INS architecture to use Madgwick's Algorithm with
+            if "MARG" in algo:
+                for i in range(1,num_samples):
+                    q.append( rb.Madgwick.updateMARG(acc[i,:], gyr[i,:], mag[i,:], q[-1], beta, freq) )
+            elif "IMU" in algo:
+                for i in range(1,num_samples):
+                    q.append( rb.Madgwick.updateIMU(acc[i,:], gyr[i,:], q[-1], beta, freq) )
+        elif algo.startswith("Mahony"):
+            freq, Kp, Ki = 100.0, 0.1, 0.5
+            if len(params)>2:
+                freq = params[2]
+            if len(params)>1:
+                Kp = params[1]
+            if len(params)>0:
+                Ki = params[0]
+            # Initial Pose is estimated with Accelerometer
+            q = [ np.array(rb.am2q(acc[0])) ]   # Initial Pose is estimated with Accelerometer
+            # Choose INS architecture to use Mahony's Algorithm with
+            if "MARG" in algo:
+                for i in range(1,num_samples):
+                    q.append( rb.Mahony.updateMARG(acc[i,:], gyr[i,:], mag[i,:], q[-1], freq, Kp, Ki) )
+            if "IMU" in algo:
+                for i in range(1,num_samples):
+                    q.append( rb.Mahony.updateIMU(acc[i,:], gyr[i,:], q[-1], freq, Kp, Ki) )
+        elif algo=="Gravity":
+            for i in range(num_samples):
+                q.append( rb.am2q(acc[i,:]) )
+        elif algo=="IMU":
+            for i in range(num_samples):
+                q.append( rb.am2q(acc[i,:], mag[i,:]) )
+        return np.array(q)
+
+
+    def getMSE(self, ref_values, values):
+        num_samples = np.shape(values)[0]
+        num_labels = np.shape(values)[1]
+        mse = []
+        for j in range(num_labels):
+            line_errors = []
+            for i in range(num_samples):
+                line_errors.append( (values[i,j]-ref_values[i,j])**2 )
+            mse.append(line_errors)
+        mse_errors = np.array(mse) / num_samples
+        return np.transpose(mse_errors)
 
 
     def countHeaders(self, data_lines=[]):

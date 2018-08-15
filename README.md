@@ -37,3 +37,8 @@ and their derived computations (position, velocity, orientation, etc.)
 of the Informatics Institute of the Polytechnic of Silesia.
 + [The Event-Camera Dataset and Simulator](http://rpg.ifi.uzh.ch/davis_data.html)
 of the Department of Informatics from the ETH Zurich.
+
+## Inspirations
+
++ [Alpha Plot](https://github.com/narunlifescience/alphaplot) is a beautiful tool for scientific data analysis and visualization.
++ [LabPlot](https://labplot.kde.org/) is a KDE-based application centered in data analysis.

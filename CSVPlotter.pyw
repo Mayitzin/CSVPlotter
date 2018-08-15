@@ -28,129 +28,13 @@ all_labels = {"repoIMU": {"Accelerometers":['IMU Acceleration_X', 'IMU Accelerat
                            }
              }
 
-basic_data = ["Accelerometers", "Gyroscopes", "Magnetometers", "Quaternions"]
+# basic_data = ["Accelerometers", "Gyroscopes", "Magnetometers", "Quaternions"]
 
 plotting_options = ["Grid-X","Label-X","Values-X","Grid-Y","Label-Y","Values-Y","ShowTitle"]
 # Set default List of Colors
 colors = [(255,0,0,255),(0,255,0,255),(60,60,255,255),          # Red, Green, Blue
           (120,0,0,255),(0,100,0,255),(0,0,150,255),            # Dark Red, Dark Green, Dark Blue
           (215,215,0,255),(150,150,0,255),(125,125,125,255)  ]  # Yellow, Dark Yellow, Gray
-
-
-class Data:
-    def __init__(self, fileName):
-        self.file = fileName
-        self.labels = ["Accelerometers", "Gyroscopes", "Magnetometers", "Quaternions"]
-        self.data, self.headers = self.getData(self.file)
-        self.num_samples = len(self.data)
-        self.labels, self.indices = self.idLabelGroups(self.headers)
-        self.acc, self.gyr, self.mag, self.qts = [], [], [], []
-        self.allotData(self.data, self.labels, self.indices)
-
-    def getData(self, fileName, data_type='float'):
-        """getData reads the data stored in a CSV file, returns a numPy array of
-        its contents and a list of its headers.
-
-        fileName    is a string of the name of the requested file.
-
-        Returns:
-
-        data        is an array of the size M-by-N, where M is the number of
-                    samples and N is the number of observed elements (headers or
-                    columns.)
-        headers     is a list of strings with the headers in the file. It is
-                    also of size N.
-        """
-        data, headers = [], []
-        try:
-            with open(fileName, 'r') as f:
-                read_data = f.readlines()
-            # Read and store Headers in a list of strings
-            header_rows = self.countHeaders(read_data)
-            if header_rows > 1:
-                headers = self.mergeHeaders(read_data[:header_rows])
-            else:
-                [headers.append(header.lstrip()) for header in read_data[0].strip().split(';')]
-            # Read and store the data in a NumPy array
-            [data.append( line.strip().split(';') ) for line in read_data[header_rows:]]    # Skip the first N lines
-            data = np.array(data, dtype=data_type)
-        except:
-            data = np.array([], dtype=data_type)
-        return data, headers
-
-    def countHeaders(self, data_lines=[]):
-        row_count = 0
-        for line in data_lines:
-            elements_array = []
-            for element in line.strip().split(';'):
-                elements_array.append(self.isfloat(element))
-            if not all(elements_array):
-                row_count += 1
-            else:
-                break
-        return row_count
-
-    def mergeHeaders(self, header_lines):
-        all_headers = []
-        for line in header_lines:
-            split_line = line.strip().split(';')
-            temp_header = split_line
-            for index in range(len(split_line)):
-                if len(temp_header[index])<1:
-                    temp_header[index] = temp_header[index-1]
-            all_headers.append(temp_header)
-        new_headers = []
-        for h in list(map(list, zip(*all_headers))):
-            new_label = '_'.join(h).strip('_')
-            if new_label not in new_headers:
-                new_headers.append(new_label)
-        return new_headers
-
-    def isfloat(self, value):
-        try:
-            float(value)
-            return True
-        except ValueError:
-            return False
-
-    def idLabelGroups(self, found_headers, single_group=True):
-        labels2use = []
-        all_group_indices = []
-        for dset_lbl in all_labels:
-            all_group_labels = []
-            group_indices = []
-            headers_keys = list(all_labels[dset_lbl].keys())
-            for i in range(len(headers_keys)):
-                header_group = headers_keys[i]
-                group_labels = all_labels[dset_lbl][header_group]
-                group_indices.append(self.matchIndices(found_headers, group_labels))
-                all_group_labels += group_labels
-            if all(x in found_headers for x in all_group_labels):
-                labels2use.append(dset_lbl)
-                all_group_indices.append(group_indices)
-        if single_group and len(labels2use)>0:
-            return all_labels[labels2use[0]].copy(), all_group_indices[0]
-        else:
-            return labels2use
-
-    def matchIndices(self, all_headers, requested_headers):
-        requested_indices = []
-        for header in requested_headers:
-            if header in all_headers:
-                requested_indices.append(all_headers.index(header))
-        return requested_indices
-
-    def allotData(self, data, labels, indices):
-        labels_list = list(labels.keys())
-        for label in labels_list:
-            if label == "Accelerometers":
-                self.acc = data[:,indices[labels_list.index("Accelerometers")]]
-            if label == "Gyroscopes":
-                self.gyr = data[:,indices[labels_list.index("Gyroscopes")]]
-            if label == "Magnetometers":
-                self.mag = data[:,indices[labels_list.index("Magnetometers")]]
-            if label == "Quaternions":
-                self.qts = data[:,indices[labels_list.index("Quaternions")]]
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -164,56 +48,28 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_tableWidget()
         self.all_data, self.indices = [], []
 
-
     """ ========================== SIGNALED FUNCTIONS ==========================
     """
     @pyqtSlot()
     def on_tableWidget_itemSelectionChanged(self):
         row = self.tableWidget.currentRow()
         if row>-1:
-            acc, gyr, mag, qts = [], [], [], []
             self.file2use = self.tableWidget.item(row,0).text()
             path2file = os.path.normpath(os.path.join(base_path, self.file2use))
-            # self.all_data, found_headers = self.getData(path2file)
-            # myLabels = self.findLabels(found_headers)
-            # labels2find = list(all_labels[myLabels].keys())
-            # self.indices = []
-            # [ self.indices.append(self.getIndices(found_headers, all_labels[myLabels][labels2find[idx]])) for idx in range(len(labels2find)) ]
-            # # print("Indices:", self.indices)
-            # # for label in labels2find:
-            # #     print("-", label, "indices:", labels2find.index(label))
-            # #     print("   ", self.indices[labels2find.index(label)])
-
-            # if "Accelerometers" in labels2find:
-            #     acc = self.all_data[:,self.indices[labels2find.index("Accelerometers")]]
-            # if "Gyroscopes" in labels2find:
-            #     gyr = self.all_data[:,self.indices[labels2find.index("Gyroscopes")]]
-            # if "Magnetometers" in labels2find:
-            #     mag = self.all_data[:,self.indices[labels2find.index("Magnetometers")]]
-            # if "Quaternions" in labels2find:
-            #     qts = self.all_data[:,self.indices[labels2find.index("Quaternions")]]
-            # self.plotData(self.graphicsView, acc)
-            # self.plotData(self.graphicsView_2, gyr)
-            # self.plotData(self.graphicsView_3, mag)
-            # self.plotData(self.graphicsView_4, qts)
-            # # Get and Plot Shadow
-            # self.updateLookupGraph(acc)
-            # # Compute and Plot Quaternions
-            # beta = 0.0029
-            # q = self.estimatePose(acc, gyr, mag, "MadgwickIMU", [beta, 100.0])
-            # # q = self.estimatePose(acc, gyr, mag, "MahonyIMU", [0.1, 0.5, 100])
-            # mse_errors = self.getMSE(qts, q)
-            # self.plotData(self.graphicsView_5, q)
-            # self.plotData(self.graphicsView_6, mse_errors)
-            # mse_sum = np.mean(np.mean(mse_errors))
-            # print("MSE_error(%f) = %e" % (beta,mse_sum))
-
             data = Data(path2file)
-            print("\n- File:", data.file)
-            print("- Headers:", data.headers)
-            print("- Labels:", data.labels)
-            print("- Indices:", data.indices)
-            print("- Accelerometers:", np.shape(data.acc))
+            # self.printDatasetInfo(data)
+            # Compute and Plot Quaternions
+            beta = 0.0029
+            q = self.estimatePose(data.acc, data.gyr, data.mag, "MahonyIMU", [0.1, 0.5, 100])
+            # q = self.estimatePose(data.acc, data.gyr, data.mag, "MahonyMARG", [0.1, 0.5, 100])
+            # q = self.estimatePose(data.acc, data.gyr, data.mag, "MadgwickIMU", [beta, 100.0])
+            # q = self.estimatePose(data.acc, data.gyr, data.mag, "MadgwickMARG", [beta, 100.0])
+            mse_errors = self.getMSE(data.qts, q)
+            mse_sum = np.mean(np.mean(mse_errors))
+            print("MSE_error(%f) = %e" % (beta,mse_sum))
+            self.updatePlots(data)
+            self.plotData(self.graphicsView_5, q)
+            self.plotData(self.graphicsView_6, mse_errors)
 
     def findLabels(self, found_headers, single_group=True):
         labels2use = []
@@ -255,6 +111,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.graphicsView_4.setBackground(background=None)
         self.graphicsView_4.setAntialiasing(True)
         self.graphicsView_4.showAxis('bottom', False)
+        # self.graphicsView_5.setBackground(background=None)
+        self.graphicsView_5.setAntialiasing(True)
+        self.graphicsView_5.showAxis('bottom', False)
+        # self.graphicsView_6.setBackground(background=None)
+        self.graphicsView_6.setAntialiasing(True)
+        self.graphicsView_6.showAxis('bottom', False)
         self.setupLookupGraph()
 
 
@@ -276,6 +138,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def updateLookupGraph(self, data):
         # Get and Plot Shadow
+        self.graphicsView_7.clear()
         shadow = self.getDataShadow(data)
         x_axis = range(np.shape(shadow)[0])
         upper_line = pg.PlotDataItem(x_axis, shadow[:,0])
@@ -304,6 +167,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     ## ============ DATA HANDLING FUNCTIONS ============
+    def printDatasetInfo(self, data):
+        print("\n- File:", data.file)
+        print("- Headers:", data.headers)
+        print("- Num Samples:", data.num_samples)
+        print("- Labels:", data.labels)
+        print("- Indices:", data.indices)
+        print("- Magnetometers:", np.shape(data.mag))
+
+
     def getDataShadow(self, data):
         num_rows = np.shape(data)[0]
         shadow = np.linalg.norm(data, axis=1).reshape((num_rows,1))
@@ -401,8 +273,13 @@ class MainWindow(QtWidgets.QMainWindow):
             q = [ np.array(rb.am2q(acc[0])) ]
             # Choose INS architecture to use Madgwick's Algorithm with
             if "MARG" in algo:
-                for i in range(1,num_samples):
-                    q.append( rb.Madgwick.updateMARG(acc[i,:], gyr[i,:], mag[i,:], q[-1], beta, freq) )
+                if len(mag)>0:
+                    for i in range(1,num_samples):
+                        q.append( rb.Madgwick.updateMARG(acc[i,:], gyr[i,:], mag[i,:], q[-1], beta, freq) )
+                else:
+                    print("[WARN] No Compass data found. Computing Orientation from Accelerometers and Gyroscopes ONLY.")
+                    for i in range(1,num_samples):
+                        q.append( rb.Madgwick.updateIMU(acc[i,:], gyr[i,:], q[-1], beta, freq) )
             elif "IMU" in algo:
                 for i in range(1,num_samples):
                     q.append( rb.Madgwick.updateIMU(acc[i,:], gyr[i,:], q[-1], beta, freq) )
@@ -512,6 +389,133 @@ class MainWindow(QtWidgets.QMainWindow):
             QtGui.QMessageBox.warning(self, "Invalid File", "The selected file does not have valid data.")
         self.plot_settings = current_settings.copy()
 
+
+    def updatePlots(self, data):
+        # Get and Plot Shadow
+        self.updateLookupGraph(data.acc)
+        self.plotData(self.graphicsView, data.acc)
+        self.plotData(self.graphicsView_2, data.gyr)
+        self.plotData(self.graphicsView_3, data.mag)
+        self.plotData(self.graphicsView_4, data.qts)
+
+
+class Data:
+    def __init__(self, fileName):
+        self.file = fileName
+        self.data, self.headers = self.getData(self.file)
+        self.num_samples = len(self.data)
+        self.labels, self.indices = self.idLabelGroups(self.headers)
+        self.acc, self.gyr, self.mag, self.qts = [], [], [], []
+        self.allotData(self.data, self.labels, self.indices)
+
+    def getData(self, fileName, data_type='float'):
+        """getData reads the data stored in a CSV file, returns a numPy array of
+        its contents and a list of its headers.
+
+        fileName    is a string of the name of the requested file.
+
+        Returns:
+
+        data        is an array of the size M-by-N, where M is the number of
+                    samples and N is the number of observed elements (headers or
+                    columns.)
+        headers     is a list of strings with the headers in the file. It is
+                    also of size N.
+        """
+        data, headers = [], []
+        try:
+            with open(fileName, 'r') as f:
+                read_data = f.readlines()
+            # Read and store Headers in a list of strings
+            header_rows = self.countHeaders(read_data)
+            if header_rows > 1:
+                headers = self.mergeHeaders(read_data[:header_rows])
+            else:
+                [headers.append(header.lstrip()) for header in read_data[0].strip().split(';')]
+            # Read and store the data in a NumPy array
+            [data.append( line.strip().split(';') ) for line in read_data[header_rows:]]    # Skip the first N lines
+            data = np.array(data, dtype=data_type)
+        except:
+            data = np.array([], dtype=data_type)
+        return data, headers
+
+    def countHeaders(self, data_lines=[]):
+        row_count = 0
+        for line in data_lines:
+            elements_array = []
+            for element in line.strip().split(';'):
+                elements_array.append(self.isfloat(element))
+            if not all(elements_array):
+                row_count += 1
+            else:
+                break
+        return row_count
+
+    def mergeHeaders(self, header_lines):
+        all_headers = []
+        for line in header_lines:
+            split_line = line.strip().split(';')
+            temp_header = split_line
+            for index in range(len(split_line)):
+                if len(temp_header[index])<1:
+                    temp_header[index] = temp_header[index-1]
+            all_headers.append(temp_header)
+        new_headers = []
+        for h in list(map(list, zip(*all_headers))):
+            new_label = '_'.join(h).strip('_')
+            if new_label not in new_headers:
+                new_headers.append(new_label)
+        return new_headers
+
+    def isfloat(self, value):
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+
+    def idLabelGroups(self, found_headers, single_group=True):
+        labels2use = []
+        all_group_indices = []
+        for dset_lbl in all_labels:
+            all_group_labels = []
+            group_indices = []
+            headers_keys = list(all_labels[dset_lbl].keys())
+            for i in range(len(headers_keys)):
+                header_group = headers_keys[i]
+                group_labels = all_labels[dset_lbl][header_group]
+                group_indices.append(self.matchIndices(found_headers, group_labels))
+                all_group_labels += group_labels
+            if all(x in found_headers for x in all_group_labels):
+                labels2use.append(dset_lbl)
+                all_group_indices.append(group_indices)
+        if single_group and len(labels2use)>0:
+            return all_labels[labels2use[0]].copy(), all_group_indices[0]
+        else:
+            return labels2use, all_group_indices
+
+    def matchIndices(self, all_headers, requested_headers):
+        requested_indices = []
+        for header in requested_headers:
+            if header in all_headers:
+                requested_indices.append(all_headers.index(header))
+        return requested_indices
+
+    def allotData(self, data, labels, indices):
+        try:
+            labels_list = list(labels.keys())
+            for label in labels_list:
+                if label == "Accelerometers":
+                    self.acc = data[:,indices[labels_list.index("Accelerometers")]]
+                if label == "Gyroscopes":
+                    self.gyr = data[:,indices[labels_list.index("Gyroscopes")]]
+                if label == "Magnetometers":
+                    self.mag = data[:,indices[labels_list.index("Magnetometers")]]
+                if label == "Quaternions":
+                    self.qts = data[:,indices[labels_list.index("Quaternions")]]
+                    # q = rb.Quaternion(self.qts[0])
+        except:
+            print("[WARN] No data to allocate.")
 
 def main():
     app = QtWidgets.QApplication(sys.argv)

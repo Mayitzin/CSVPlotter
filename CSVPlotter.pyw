@@ -15,7 +15,7 @@ sys.path.insert(0, '../Robotics/Motion')
 import rigidbody as rb
 
 base_path = "./data"
-test_file = "./data/TStick_Test02_Trial1.csv"
+workspace = [base_path]
 
 all_labels = {"repoIMU": {"Accelerometers":['IMU Acceleration_X', 'IMU Acceleration_Y', 'IMU Acceleration_Z'],
                          "Gyroscopes":['IMU Gyroscope_X', 'IMU Gyroscope_Y', 'IMU Gyroscope_Z'],
@@ -27,8 +27,6 @@ all_labels = {"repoIMU": {"Accelerometers":['IMU Acceleration_X', 'IMU Accelerat
                             "Quaternions":['Quat_q0', 'Quat_q1', 'Quat_q2', 'Quat_q3']
                            }
              }
-
-# basic_data = ["Accelerometers", "Gyroscopes", "Magnetometers", "Quaternions"]
 
 plotting_options = ["Grid-X","Label-X","Values-X","Grid-Y","Label-Y","Values-Y","ShowTitle"]
 # Set default List of Colors
@@ -45,47 +43,35 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setupWidgets()
         self.file2use = ""
-        self.update_tableWidget()
+        self.update_tableWidget(workspace)
         self.all_data, self.indices = [], []
 
     """ ========================== SIGNALED FUNCTIONS ==========================
     """
     @pyqtSlot()
     def on_tableWidget_itemSelectionChanged(self):
+        self.statusBar.showMessage("Reading File")
         row = self.tableWidget.currentRow()
         if row>-1:
             self.file2use = self.tableWidget.item(row,0).text()
-            path2file = os.path.normpath(os.path.join(base_path, self.file2use))
-            data = Data(path2file)
+            # path2file = os.path.normpath(os.path.join(base_path, self.file2use))
+            data = Data(self.file2use)
             # self.printDatasetInfo(data)
+            print("File has", self.quickCountLines(self.file2use), "lines and", self.quickCountColumns(self.file2use), "columns.")
             # Compute and Plot Quaternions
             beta = 0.0029
-            q = self.estimatePose(data.acc, data.gyr, data.mag, "MahonyIMU", [0.1, 0.5, 100])
-            # q = self.estimatePose(data.acc, data.gyr, data.mag, "MahonyMARG", [0.1, 0.5, 100])
-            # q = self.estimatePose(data.acc, data.gyr, data.mag, "MadgwickIMU", [beta, 100.0])
-            # q = self.estimatePose(data.acc, data.gyr, data.mag, "MadgwickMARG", [beta, 100.0])
-            mse_errors = self.getMSE(data.qts, q)
-            mse_sum = np.mean(np.mean(mse_errors))
-            print("MSE_error(%f) = %e" % (beta,mse_sum))
-            self.updatePlots(data)
-            self.plotData(self.graphicsView_5, q)
-            self.plotData(self.graphicsView_6, mse_errors)
-
-    def findLabels(self, found_headers, single_group=True):
-        labels2use = []
-        for l in all_labels:
-            all_group_labels = []
-            headers_keys = list(all_labels[l].keys())
-            for i in range(len(headers_keys)):
-                header_group = headers_keys[i]
-                group_labels = all_labels[l][header_group]
-                all_group_labels += group_labels
-            if all(x in found_headers for x in all_group_labels):
-                labels2use.append(l)
-        if single_group and len(labels2use)>0:
-            return labels2use[0]
-        else:
-            return labels2use
+            q = self.estimatePose(data, "MahonyIMU", [0.1, 0.5, 100])
+            # q = self.estimatePose(data, "MahonyMARG", [0.1, 0.5, 100])
+            # q = self.estimatePose(data, "MadgwickIMU", [beta, 100.0])
+            # q = self.estimatePose(data, "MadgwickMARG", [beta, 100.0])
+            if len(q)>0:
+                mse_errors = self.getMSE(data.qts, q)
+                mse_sum = np.mean(np.mean(mse_errors))
+                self.updatePlots(data)
+                self.plotData(self.graphicsView_5, q)
+                self.plotData(self.graphicsView_6, mse_errors)
+                print("MSE_error(%f) = %e" % (beta,mse_sum))
+        self.statusBar.showMessage("Ready")
 
 
     @pyqtSlot(QtGui.QKeyEvent)
@@ -93,7 +79,19 @@ class MainWindow(QtWidgets.QMainWindow):
         print("graphicsView was clicked")
 
 
+    def quickCountLines(self, fileName):
+        return sum(1 for line in open(fileName))
+
+
+    def quickCountColumns(self, fileName, separator=';'):
+        with open(fileName, 'r') as f:
+            read_line = f.readline()
+        num_columns = len( read_line.strip().split(separator) )
+        return num_columns
+
+
     def setupWidgets(self):
+        self.tableWidget.setHorizontalHeaderLabels(["File", "Lines", "Columns"])
         self.plot_settings = dict.fromkeys(plotting_options, True)
         self.setupPlotWidgets()
 
@@ -146,6 +144,7 @@ class MainWindow(QtWidgets.QMainWindow):
         filled_plot = pg.FillBetweenItem(upper_line, lower_line, brush=(100,100,100,200))
         self.graphicsView_7.addItem(filled_plot)
 
+
     def updateCoords(self, region):
         if len(self.all_data)>0:
             minX, maxX = region.getRegion()
@@ -158,12 +157,24 @@ class MainWindow(QtWidgets.QMainWindow):
             self.plotData(self.graphicsView_4, self.all_data[ROI[0]:ROI[1],self.indices[3]])
 
 
-    def update_tableWidget(self):
-        found_files = os.listdir(base_path)
+    def update_tableWidget(self, workspace):
+        found_files = self.getFiles(workspace)
+        print(found_files)
         num_files = len(found_files)
         self.tableWidget.setRowCount(num_files)
         for row in range(num_files):
             self.tableWidget.setItem(row, 0, QtGui.QTableWidgetItem(found_files[row]))
+
+
+    def getFiles(self, workspace):
+        found_files = []
+        for folder in workspace:
+            files_in_folder = os.listdir(folder)
+            complete_path_files = []
+            for f in files_in_folder:
+                complete_path_files.append(os.path.normpath(os.path.join(folder, f)))
+            found_files += complete_path_files
+        return found_files
 
 
     ## ============ DATA HANDLING FUNCTIONS ============
@@ -184,82 +195,13 @@ class MainWindow(QtWidgets.QMainWindow):
         return shadow
 
 
-    def getHeaders(self, fileName):
-        """This function reads the headers stored in the first line of a CSV
-        file. It splits the first line at the separator ';' and returns the
-        resulting strings.
-
-        fileName    is a string of the name of the requested file.
-        """
-        with open(fileName, 'r') as f:
-            read_data = f.readline()
-        header_string = read_data.strip().split(';')
-        headers = []
-        [ headers.append(header.lstrip()) for header in header_string ]
-        return headers
-
-
-    def mergeHeaders(self, header_lines):
-        all_headers = []
-        for line in header_lines:
-            split_line = line.strip().split(';')
-            temp_header = split_line
-            for index in range(len(split_line)):
-                if len(temp_header[index])<1:
-                    temp_header[index] = temp_header[index-1]
-            all_headers.append(temp_header)
-        new_headers = []
-        for h in list(map(list, zip(*all_headers))):
-            new_label = '_'.join(h).strip('_')
-            if new_label not in new_headers:
-                new_headers.append(new_label)
-        return new_headers
-
-
-    def getIndices(self, all_headers, requested_headers):
-        requested_indices = []
-        for header in requested_headers:
-            if header in all_headers:
-                requested_indices.append(all_headers.index(header))
-        return requested_indices
-
-
-    def getData(self, fileName, data_type='float'):
-        """getData reads the data stored in a CSV file, returns a numPy array of
-        its contents and a list of its headers.
-
-        fileName    is a string of the name of the requested file.
-
-        Returns:
-
-        data        is an array of the size M-by-N, where M is the number of
-                    samples and N is the number of observed elements (headers or
-                    columns.)
-        headers     is a list of strings with the headers in the file. It is
-                    also of size N.
-        """
-        data, headers = [], []
-        try:
-            with open(fileName, 'r') as f:
-                read_data = f.readlines()
-            # Read and store Headers in a list of strings
-            header_rows = self.countHeaders(read_data)
-            if header_rows > 1:
-                headers = self.mergeHeaders(read_data[:header_rows])
-            else:
-                [headers.append(header.lstrip()) for header in read_data[0].strip().split(';')]
-            # Read and store the data in a NumPy array
-            [data.append( line.strip().split(';') ) for line in read_data[header_rows:]]    # Skip the first N lines
-            data = np.array(data, dtype=data_type)
-        except:
-            data = np.array([], dtype=data_type)
-        return data, headers
-
-
-    def estimatePose(self, acc, gyr, mag, algo='MadgwickMARG', params=[]):
+    def estimatePose(self, data, algo='MadgwickMARG', params=[]):
         """estimatePose computes the Orientation of the frame, given the IMU data
         """
-        num_samples = np.shape(acc)[0]
+        acc = data.acc
+        gyr = data.gyr
+        mag = data.mag
+        num_samples = data.num_samples
         q = []
         if num_samples<1:
             return np.array(q)
@@ -320,27 +262,6 @@ class MainWindow(QtWidgets.QMainWindow):
             mse.append(line_errors)
         mse_errors = np.array(mse) / num_samples
         return np.transpose(mse_errors)
-
-
-    def countHeaders(self, data_lines=[]):
-        row_count = 0
-        for line in data_lines:
-            elements_array = []
-            for element in line.strip().split(';'):
-                elements_array.append(self.isfloat(element))
-            if not all(elements_array):
-                row_count += 1
-            else:
-                break
-        return row_count
-
-
-    def isfloat(self, value):
-        try:
-            float(value)
-            return True
-        except ValueError:
-            return False
 
 
     def selectColor(self, num_headers, all_colors):

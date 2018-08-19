@@ -132,11 +132,14 @@
      </item>
      <item>
       <widget class="QTableWidget" name="tableWidget">
+       <property name="selectionBehavior">
+        <enum>QAbstractItemView::SelectRows</enum>
+       </property>
        <property name="showGrid">
         <bool>false</bool>
        </property>
        <property name="columnCount">
-        <number>3</number>
+        <number>5</number>
        </property>
        <attribute name="horizontalHeaderVisible">
         <bool>true</bool>
@@ -153,6 +156,8 @@
        <attribute name="verticalHeaderMinimumSectionSize">
         <number>18</number>
        </attribute>
+       <column/>
+       <column/>
        <column/>
        <column/>
        <column/>

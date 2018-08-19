@@ -29,6 +29,7 @@ and their derived computations (position, velocity, orientation, etc.)
 
 + It will be implemented, once the prototype in Python is completed.
 + The most likely plotting library will be [VTK](https://www.vtk.org/).
++ To consider is also the [QwtPlot3D](http://qwtplot3d.sourceforge.net/web/navigation/feature_frame.html) API.
 + For better performance, [OpenGL](https://www.opengl.org/) is considered.
 
 ## Datasets
@@ -37,8 +38,12 @@ and their derived computations (position, velocity, orientation, etc.)
 of the Informatics Institute of the Polytechnic of Silesia.
 + [The Event-Camera Dataset and Simulator](http://rpg.ifi.uzh.ch/davis_data.html)
 of the Department of Informatics from the ETH Zurich.
++ [TUM Visual-Inertial Dataset](https://vision.in.tum.de/data/datasets/visual-inertial-dataset)
+for Visual Odometry including several recordings of synchronized cameras and IMUs.
++ [RGB-D SLAM Dataset and Benchmark](https://vision.in.tum.de/data/datasets/rgbd-dataset) from the TUM.
 
 ## Inspirations
 
 + [Alpha Plot](https://github.com/narunlifescience/alphaplot) is a beautiful tool for scientific data analysis and visualization.
 + [LabPlot](https://labplot.kde.org/) is a KDE-based application centered in data analysis.
++ [rviz](http://wiki.ros.org/rviz) by [ROS](http://www.ros.org/).

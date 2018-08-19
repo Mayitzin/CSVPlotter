@@ -6,6 +6,7 @@
 import os
 import sys
 import numpy as np
+import datetime
 from PyQt5 import QtGui, uic, QtWidgets, QtCore
 from PyQt5.QtCore import pyqtSlot
 import pyqtgraph as pg
@@ -57,20 +58,20 @@ class MainWindow(QtWidgets.QMainWindow):
             # path2file = os.path.normpath(os.path.join(base_path, self.file2use))
             data = Data(self.file2use)
             # self.printDatasetInfo(data)
-            print("File has", self.quickCountLines(self.file2use), "lines and", self.quickCountColumns(self.file2use), "columns.")
             # Compute and Plot Quaternions
             beta = 0.0029
-            q = self.estimatePose(data, "MahonyIMU", [0.1, 0.5, 100])
-            # q = self.estimatePose(data, "MahonyMARG", [0.1, 0.5, 100])
-            # q = self.estimatePose(data, "MadgwickIMU", [beta, 100.0])
-            # q = self.estimatePose(data, "MadgwickMARG", [beta, 100.0])
-            if len(q)>0:
-                mse_errors = self.getMSE(data.qts, q)
-                mse_sum = np.mean(np.mean(mse_errors))
-                self.updatePlots(data)
-                self.plotData(self.graphicsView_5, q)
-                self.plotData(self.graphicsView_6, mse_errors)
-                print("MSE_error(%f) = %e" % (beta,mse_sum))
+            if len(data.acc)>0:
+                q = self.estimatePose(data, "MahonyIMU", [0.1, 0.5, 100])
+                # q = self.estimatePose(data, "MahonyMARG", [0.1, 0.5, 100])
+                # q = self.estimatePose(data, "MadgwickIMU", [beta, 100.0])
+                # q = self.estimatePose(data, "MadgwickMARG", [beta, 100.0])
+                if len(q)>0:
+                    mse_errors = self.getMSE(data.qts, q)
+                    mse_sum = np.mean(np.mean(mse_errors))
+                    self.updatePlots(data)
+                    self.plotData(self.graphicsView_5, q)
+                    self.plotData(self.graphicsView_6, mse_errors)
+                    print("MSE_error(%f) = %e" % (beta,mse_sum))
         self.statusBar.showMessage("Ready")
 
 
@@ -91,7 +92,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def setupWidgets(self):
-        self.tableWidget.setHorizontalHeaderLabels(["File", "Lines", "Columns"])
+        self.tableWidget.setHorizontalHeaderLabels(["File", "Lines", "Columns", "Created", "Notes"])
         self.plot_settings = dict.fromkeys(plotting_options, True)
         self.setupPlotWidgets()
 
@@ -159,11 +160,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def update_tableWidget(self, workspace):
         found_files = self.getFiles(workspace)
-        print(found_files)
         num_files = len(found_files)
         self.tableWidget.setRowCount(num_files)
         for row in range(num_files):
-            self.tableWidget.setItem(row, 0, QtGui.QTableWidgetItem(found_files[row]))
+            file_name = found_files[row]
+            item_num_lines = QtGui.QTableWidgetItem( str(self.quickCountLines(file_name)) )
+            item_num_lines.setTextAlignment(QtCore.Qt.AlignRight)
+            item_num_cols = QtGui.QTableWidgetItem( str(self.quickCountColumns(file_name)) )
+            item_num_cols.setTextAlignment(QtCore.Qt.AlignRight)
+            date_string = datetime.datetime.fromtimestamp(os.path.getctime(file_name)).strftime('%d.%m.%y %H:%M')
+            item_date = QtGui.QTableWidgetItem( date_string )
+            item_date.setTextAlignment(QtCore.Qt.AlignRight)
+            # Populate Row with information of file
+            self.tableWidget.setItem(row, 0, QtGui.QTableWidgetItem(file_name))
+            self.tableWidget.setItem(row, 1, item_num_lines)
+            self.tableWidget.setItem(row, 2, item_num_cols)
+            self.tableWidget.setItem(row, 3, item_date)
 
 
     def getFiles(self, workspace):

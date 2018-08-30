@@ -57,7 +57,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.file2use = self.tableWidget.item(row,0).text()
             # path2file = os.path.normpath(os.path.join(base_path, self.file2use))
             data = Data(self.file2use)
-            # self.printDatasetInfo(data)
+            # data.printDatasetInfo()
             # Compute and Plot Quaternions
             beta = 0.0029
             if len(data.acc)>0:
@@ -101,21 +101,27 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.graphicsView.setBackground(background=None)
         self.graphicsView.setAntialiasing(True)
         self.graphicsView.showAxis('bottom', False)
+        self.graphicsView.enableAutoRange()
         # self.graphicsView_2.setBackground(background=None)
         self.graphicsView_2.setAntialiasing(True)
         self.graphicsView_2.showAxis('bottom', False)
+        self.graphicsView_2.enableAutoRange()
         # self.graphicsView_3.setBackground(background=None)
         self.graphicsView_3.setAntialiasing(True)
         self.graphicsView_3.showAxis('bottom', False)
+        self.graphicsView_3.enableAutoRange()
         # self.graphicsView_4.setBackground(background=None)
         self.graphicsView_4.setAntialiasing(True)
         self.graphicsView_4.showAxis('bottom', False)
+        self.graphicsView_4.enableAutoRange()
         # self.graphicsView_5.setBackground(background=None)
         self.graphicsView_5.setAntialiasing(True)
         self.graphicsView_5.showAxis('bottom', False)
+        self.graphicsView_5.enableAutoRange()
         # self.graphicsView_6.setBackground(background=None)
         self.graphicsView_6.setAntialiasing(True)
         self.graphicsView_6.showAxis('bottom', False)
+        self.graphicsView_6.enableAutoRange()
         self.setupLookupGraph()
 
 
@@ -298,6 +304,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """This function takes a numPy array of size M x 3, and plots its
         contents in the main PlotWidget using pyQtGraph.
         """
+        # print("Plotting data:", data2plot)
         lineStyle = "Line"
         current_settings = self.plot_settings.copy()
         if np.shape(data)[0] < 1:
@@ -311,11 +318,22 @@ class MainWindow(QtWidgets.QMainWindow):
             used_colors = colors[:len(data2plot)]
             if len(data2plot)==4:
                 used_colors = [colors[6]] + colors[:len(data2plot)]
-            for index in range(len(data2plot)):
-                line_data = data[:,data2plot[index]]
+            for index in data2plot:
+                line_data = data[:,index]
                 self.plotDataLine(plotWidget, line_data, lineStyle, used_colors[index])
             plotWidget.getViewBox().setAspectLocked(lock=False)
             plotWidget.autoRange()
+            # Set Ranges
+            print(plotWidget.viewRange())
+            min_Y = np.min(data[:,data2plot])
+            max_Y = np.max(data[:,data2plot])
+            # print(min_Y, ",", max_Y)
+            plotWidget.setXRange(0, data.num_samples)
+            plotWidget.setYRange(min_Y, max_Y)
+            # axX = plotWidget.getAxis('bottom')
+            # axY = plotWidget.getAxis('left')
+            # print('X axis range: {}'.format(axX.range)) # <--- get range of X axis
+            # print('Y axis range: {}'.format(axY.range)) # <--- get range of Y axis
             # Add Grid
             plotWidget.showGrid(x=current_settings["Grid-X"], y=current_settings["Grid-Y"])
         except:
@@ -449,6 +467,14 @@ class Data:
                     # q = rb.Quaternion(self.qts[0])
         except:
             print("[WARN] No data to allocate.")
+
+    def printDatasetInfo(self):
+        print("\n- File:", self.file)
+        print("- Headers:", self.headers)
+        print("- Num Samples:", self.num_samples)
+        print("- Labels:", self.labels)
+        print("- Indices:", self.indices)
+        print("- Magnetometers:", np.shape(self.mag))
 
 def main():
     app = QtWidgets.QApplication(sys.argv)

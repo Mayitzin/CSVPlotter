@@ -54,6 +54,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.statusBar.showMessage("Reading File")
         row = self.tableWidget.currentRow()
         if row>-1:
+            print(" ")
             self.file2use = self.tableWidget.item(row,0).text()
             # path2file = os.path.normpath(os.path.join(base_path, self.file2use))
             data = Data(self.file2use)
@@ -68,10 +69,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 if len(q)>0:
                     mse_errors = self.getMSE(data.qts, q)
                     mse_sum = np.mean(np.mean(mse_errors))
+                    mse_text = "MSE({:4.4f}) = {:1.4e}".format(beta,mse_sum)
+                    print("   ", mse_text)
+                    # Update Plot Lines
                     self.updatePlots(data)
                     self.plotData(self.graphicsView_5, q)
+                    # self.plotData(self.graphicsView_6, mse_errors, clearPlot=True)
                     self.plotData(self.graphicsView_6, mse_errors)
-                    print("MSE_error(%f) = %e" % (beta,mse_sum))
+                    self.updateTextItem(self.graphicsView_6, mse_text)
         self.statusBar.showMessage("Ready")
 
 
@@ -120,8 +125,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.graphicsView_5.enableAutoRange()
         # self.graphicsView_6.setBackground(background=None)
         self.graphicsView_6.setAntialiasing(True)
-        self.graphicsView_6.showAxis('bottom', False)
-        self.graphicsView_6.enableAutoRange()
+        self.graphicsView_6.showAxis('bottom', True)
+        # self.graphicsView_6.enableAutoRange()
         self.setupLookupGraph()
 
 
@@ -300,11 +305,29 @@ class MainWindow(QtWidgets.QMainWindow):
         plot_widget.plot(data, pen=pen_style, symbol=symbol_style, symbolPen=None, symbolSize=4, symbolBrush=color, name="Curve")
 
 
+    def updateTextItem(self, plotWidget, text=""):
+        # label = pg.LabelItem(justify='center')
+        # label.setText(formatted_text)
+        # plotWidget.addItem(label)
+        # print("label._sizeHint", label._sizeHint)
+        # print("label.opts", label.opts)
+        # print("label.item", label.item)
+        # print("label.itemRect()", label.itemRect())
+        
+        formatted_text = text
+        # formatted_text = "<span style='font-size: 2pt'>" + text + "</span>"
+        # scene_width = plotWidget.viewRect().top()
+        scene_height = plotWidget.viewRect().height() * 0.7
+        txtItem = pg.TextItem(formatted_text)
+        # txtItem.setText(formatted_text)
+        txtItem.setPos(0,scene_height)
+        plotWidget.addItem(txtItem)
+
+
     def plotData(self, plotWidget, data, data2plot=[], clearPlot=True):
         """This function takes a numPy array of size M x 3, and plots its
         contents in the main PlotWidget using pyQtGraph.
         """
-        # print("Plotting data:", data2plot)
         lineStyle = "Line"
         current_settings = self.plot_settings.copy()
         if np.shape(data)[0] < 1:
@@ -323,19 +346,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.plotDataLine(plotWidget, line_data, lineStyle, used_colors[index])
             plotWidget.getViewBox().setAspectLocked(lock=False)
             plotWidget.autoRange()
-            # Set Ranges
-            print(plotWidget.viewRange())
-            min_Y = np.min(data[:,data2plot])
-            max_Y = np.max(data[:,data2plot])
-            # print(min_Y, ",", max_Y)
-            plotWidget.setXRange(0, data.num_samples)
-            plotWidget.setYRange(min_Y, max_Y)
-            # axX = plotWidget.getAxis('bottom')
-            # axY = plotWidget.getAxis('left')
-            # print('X axis range: {}'.format(axX.range)) # <--- get range of X axis
-            # print('Y axis range: {}'.format(axY.range)) # <--- get range of Y axis
             # Add Grid
-            plotWidget.showGrid(x=current_settings["Grid-X"], y=current_settings["Grid-Y"])
+            plotWidget.showGrid(x=True, y=True)
+            # plotWidget.showGrid(x=current_settings["Grid-X"], y=current_settings["Grid-Y"])
         except:
             QtGui.QMessageBox.warning(self, "Invalid File", "The selected file does not have valid data.")
         self.plot_settings = current_settings.copy()

@@ -5,3 +5,6 @@
 
 # ignore the PyCharm .idea folder
 .idea/
+
+# default user files
+*.user

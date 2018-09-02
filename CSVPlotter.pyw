@@ -35,6 +35,11 @@ colors = [(255,0,0,255),(0,255,0,255),(60,60,255,255),          # Red, Green, Bl
           (120,0,0,255),(0,100,0,255),(0,0,150,255),            # Dark Red, Dark Green, Dark Blue
           (215,215,0,255),(150,150,0,255),(125,125,125,255)  ]  # Yellow, Dark Yellow, Gray
 
+data_options = { "Mahony IMU":{"Frequency":100.0, "Kp":0.1, "Ki":0.5}, # freq, Kp, Ki = 100.0, 0.1, 0.5
+            "Mahony MARG":{"Frequency":100.0, "Kp":0.1, "Ki":0.5},
+            "Madgwick IMU":{"Beta":0.01, "Frequency":100.0},
+            "Madgwick MARG":{"Beta":0.01, "Frequency":100.0}
+          }
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -62,9 +67,9 @@ class MainWindow(QtWidgets.QMainWindow):
             # Compute and Plot Quaternions
             beta = 0.0029
             if len(data.acc)>0:
-                q = self.estimatePose(data, "MahonyIMU", [0.1, 0.5, 100])
+                # q = self.estimatePose(data, "MahonyIMU", [0.1, 0.5, 100])
                 # q = self.estimatePose(data, "MahonyMARG", [0.1, 0.5, 100])
-                # q = self.estimatePose(data, "MadgwickIMU", [beta, 100.0])
+                q = self.estimatePose(data, "MadgwickIMU", [beta, 100.0])
                 # q = self.estimatePose(data, "MadgwickMARG", [beta, 100.0])
                 if len(q)>0:
                     mse_errors = self.getMSE(data.qts, q)
@@ -100,6 +105,46 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tableWidget.setHorizontalHeaderLabels(["File", "Lines", "Columns", "Created", "Notes"])
         self.plot_settings = dict.fromkeys(plotting_options, True)
         self.setupPlotWidgets()
+        self.setupOptionsTree(self.treeWidget, data_options)
+
+
+    def setupOptionsTree(self, treeWidget, data_options={}):
+        """
+        The default value for flags is:
+        Qt::ItemIsSelectable | Qt::ItemIsUserCheckable | Qt::ItemIsEnabled | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled
+
+        See:
+        - http://doc.qt.io/qt-5/qtreewidgetitem.html#flags
+        """
+        tree = treeWidget
+        tree.setHeaderHidden(False)
+        tree.setHeaderLabels(["Options", "Values"])
+        filters_list = list(data_options.keys())
+        for filter_name in filters_list:
+            # Build each Filter parent branch
+            parent = QtWidgets.QTreeWidgetItem(tree)
+            parent.setText(0, filter_name)
+            parent.setFlags(parent.flags() | QtCore.Qt.ItemIsUserCheckable)
+            parent.setCheckState(0, QtCore.Qt.Unchecked)
+            parameter_list = data_options[filter_name].keys()
+            for parameter_label in parameter_list:
+                # Read each customizable value
+                value = data_options[filter_name][parameter_label]
+                if isinstance(value, int):
+                    wid = QtWidgets.QSpinBox()
+                elif isinstance(value, float):
+                    wid = QtWidgets.QDoubleSpinBox()
+                    wid.setDecimals(4)
+                else:
+                    print("'"+str(value)+"' is not a valid value of '"+parameter_label+"' for a "+filter_name+" filter")
+                    break
+                # Build valid Spinboxes with corresponding labels and values
+                child = QtWidgets.QTreeWidgetItem(parent)
+                child.setText(0, parameter_label)
+                tree.addTopLevelItem(child) # Or parent? <---- Further test this
+                wid.setMaximum(250)
+                wid.setValue(value)
+                tree.setItemWidget(child, 1, wid)
 
 
     def setupPlotWidgets(self):
@@ -107,25 +152,34 @@ class MainWindow(QtWidgets.QMainWindow):
         self.graphicsView.setAntialiasing(True)
         self.graphicsView.showAxis('bottom', False)
         self.graphicsView.enableAutoRange()
+        self.graphicsView.setTitle("Acceleration")
+        # self.graphicsView.setTitle("<span style='font-size: 8pt'>Acceleration</span>")
+        # print(self.graphicsView.layout.count() )
+        # "<span style='font-size: 2pt'>"
         # self.graphicsView_2.setBackground(background=None)
         self.graphicsView_2.setAntialiasing(True)
         self.graphicsView_2.showAxis('bottom', False)
         self.graphicsView_2.enableAutoRange()
+        self.graphicsView_2.setTitle("Angular Velocity")
         # self.graphicsView_3.setBackground(background=None)
         self.graphicsView_3.setAntialiasing(True)
         self.graphicsView_3.showAxis('bottom', False)
         self.graphicsView_3.enableAutoRange()
+        self.graphicsView_3.setTitle("Magnetic Field")
         # self.graphicsView_4.setBackground(background=None)
         self.graphicsView_4.setAntialiasing(True)
         self.graphicsView_4.showAxis('bottom', False)
         self.graphicsView_4.enableAutoRange()
+        self.graphicsView_4.setTitle("Reference Quaternions")
         # self.graphicsView_5.setBackground(background=None)
         self.graphicsView_5.setAntialiasing(True)
         self.graphicsView_5.showAxis('bottom', False)
         self.graphicsView_5.enableAutoRange()
+        self.graphicsView_5.setTitle("Computed Quaternions")
         # self.graphicsView_6.setBackground(background=None)
         self.graphicsView_6.setAntialiasing(True)
         self.graphicsView_6.showAxis('bottom', True)
+        self.graphicsView_6.setTitle("Error")
         # self.graphicsView_6.enableAutoRange()
         self.setupLookupGraph()
 

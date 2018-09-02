@@ -5,6 +5,8 @@ Small application to read, parse and plot the data contained in a CSV file.
 It is mainly intended to be a tool to represent the data of **inertial sensors**,
 and their derived computations (position, velocity, orientation, etc.)
 
+![GUI-MainWindow](./media/screenshot_mainWindow_sensorsTab.png)
+
 ## Features
 
 - Implementation with [Qt5](https://www.qt.io/).
@@ -19,6 +21,7 @@ and their derived computations (position, velocity, orientation, etc.)
 + [PyQtGraph](http://pyqtgraph.org/) is the main plotting library.
 + ToDo:
     - [x] Identify and re-label headers of more than one line.
+    - [x] Compute and plot Quaternions and their errors (given reference Quaternions.)
     - [ ] Select format of lines (color, shape, etc.)
     - [x] Select files to plot.
     - [ ] Select elements of file to plot.

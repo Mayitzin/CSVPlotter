@@ -1,0 +1,6 @@
+{ 
+    "Mahony IMU":{"Frequency":100.0, "Kp":0.1, "Ki":0.5},
+    "Mahony MARG":{"Frequency":100.0, "Kp":0.1, "Ki":0.5},
+    "Madgwick IMU":{"Beta":0.01, "Frequency":100.0},
+    "Madgwick MARG":{"Beta":0.01, "Frequency":100.0}
+}

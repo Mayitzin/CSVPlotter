@@ -7,6 +7,7 @@ import os
 import sys
 import numpy as np
 import datetime
+import json
 from PyQt5 import QtGui, uic, QtWidgets, QtCore
 from PyQt5.QtCore import pyqtSlot
 import pyqtgraph as pg
@@ -35,11 +36,9 @@ colors = [(255,0,0,255),(0,255,0,255),(60,60,255,255),          # Red, Green, Bl
           (120,0,0,255),(0,100,0,255),(0,0,150,255),            # Dark Red, Dark Green, Dark Blue
           (215,215,0,255),(150,150,0,255),(125,125,125,255)  ]  # Yellow, Dark Yellow, Gray
 
-data_options = { "Mahony IMU":{"Frequency":100.0, "Kp":0.1, "Ki":0.5}, # freq, Kp, Ki = 100.0, 0.1, 0.5
-            "Mahony MARG":{"Frequency":100.0, "Kp":0.1, "Ki":0.5},
-            "Madgwick IMU":{"Beta":0.01, "Frequency":100.0},
-            "Madgwick MARG":{"Beta":0.01, "Frequency":100.0}
-          }
+with open('data_options.dat', 'r') as f:
+    read_lines = f.readlines()
+data_options = json.loads( ''.join(read_lines) )
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -154,7 +153,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.graphicsView.enableAutoRange()
         self.graphicsView.setTitle("Acceleration")
         # self.graphicsView.setTitle("<span style='font-size: 8pt'>Acceleration</span>")
-        # print(self.graphicsView.layout.count() )
         # "<span style='font-size: 2pt'>"
         # self.graphicsView_2.setBackground(background=None)
         self.graphicsView_2.setAntialiasing(True)

@@ -11,6 +11,7 @@ import json
 from PyQt5 import QtGui, uic, QtWidgets, QtCore
 from PyQt5.QtCore import pyqtSlot
 import pyqtgraph as pg
+import pprint
 
 # Using module 'rigidbody' from repository 'Robotics' to compute Orientations
 sys.path.insert(0, '../Robotics/Motion')
@@ -38,7 +39,18 @@ colors = [(255,0,0,255),(0,255,0,255),(60,60,255,255),          # Red, Green, Bl
 
 with open('data_options.dat', 'r') as f:
     read_lines = f.readlines()
-data_options = json.loads( ''.join(read_lines) )
+general_options = json.loads( ''.join(read_lines) )
+
+def count_levels(d):
+    return max(count_levels(v) if isinstance(v,dict) else 0 for v in d.values()) + 1
+
+dict_level_count = count_levels(general_options)
+print("Levels:", dict_level_count)
+
+pprint.pprint(general_options)
+
+data_options = general_options["Pose Estimation"]
+
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -112,14 +124,17 @@ class MainWindow(QtWidgets.QMainWindow):
         The default value for flags is:
         Qt::ItemIsSelectable | Qt::ItemIsUserCheckable | Qt::ItemIsEnabled | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled
 
+        ToDo:
+        - Implement an automated method for N number of levels.
+
         See:
         - http://doc.qt.io/qt-5/qtreewidgetitem.html#flags
         """
         tree = treeWidget
         tree.setHeaderHidden(False)
         tree.setHeaderLabels(["Options", "Values"])
-        filters_list = list(data_options.keys())
-        for filter_name in filters_list:
+        top_level_keys = list(data_options.keys())
+        for filter_name in top_level_keys:
             # Build each Filter parent branch
             parent = QtWidgets.QTreeWidgetItem(tree)
             parent.setText(0, filter_name)

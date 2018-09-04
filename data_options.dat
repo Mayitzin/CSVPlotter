@@ -1,6 +1,16 @@
-{ 
-    "Mahony IMU":{"Frequency":100.0, "Kp":0.1, "Ki":0.5},
-    "Mahony MARG":{"Frequency":100.0, "Kp":0.1, "Ki":0.5},
-    "Madgwick IMU":{"Beta":0.01, "Frequency":100.0},
-    "Madgwick MARG":{"Beta":0.01, "Frequency":100.0}
+{
+    "Pose Estimation":{ 
+        "Mahony IMU":{"Frequency":100.0, "Kp":0.1, "Ki":0.5},
+        "Mahony MARG":{"Frequency":100.0, "Kp":0.1, "Ki":0.5},
+        "Madgwick IMU":{"Beta":0.01, "Frequency":100.0},
+        "Madgwick MARG":{"Beta":0.01, "Frequency":100.0}
+    },
+    "Filters":{
+        "Median":{"window_size":3},
+        "Low-Pass":{"sampling_freq":200.0, "order":3, "cutoff":25.0},
+        "Gaussian":{"sigma":1.0},
+        "Savitzky-Golay":{"window_size":5, "polynomial_order":3},
+        "Uniform":{"window_size":3},
+        "Kalman":{"s_Q":0.1, "s_R":0.1}
+    }
 }

@@ -45,11 +45,10 @@ def count_levels(d):
     return max(count_levels(v) if isinstance(v,dict) else 0 for v in d.values()) + 1
 
 dict_level_count = count_levels(general_options)
-print("Levels:", dict_level_count)
+# print("Levels:", dict_level_count)
+# pprint.pprint(general_options)
 
-pprint.pprint(general_options)
-
-data_options = general_options["Pose Estimation"]
+# pose_Estimation_options = general_options["Pose Estimation"]
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -57,11 +56,12 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
         uic.loadUi('mainwindow.ui', self)
         # Remove QBasicTimer error by ensuring Application quits at right time.
+        self.all_data, self.indices = [], []
+        self.all_checkables = {}
+        self.file2use = ""
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setupWidgets()
-        self.file2use = ""
         self.update_tableWidget(workspace)
-        self.all_data, self.indices = [], []
 
     """ ========================== SIGNALED FUNCTIONS ==========================
     """
@@ -116,49 +116,72 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tableWidget.setHorizontalHeaderLabels(["File", "Lines", "Columns", "Created", "Notes"])
         self.plot_settings = dict.fromkeys(plotting_options, True)
         self.setupPlotWidgets()
-        self.setupOptionsTree(self.treeWidget, data_options)
+        self.setupOptionsTree(self.treeWidget, general_options)
 
 
-    def setupOptionsTree(self, treeWidget, data_options={}):
-        """
-        The default value for flags is:
-        Qt::ItemIsSelectable | Qt::ItemIsUserCheckable | Qt::ItemIsEnabled | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled
+    def fill_item(self, item, value, checkable=False):
+        item.setExpanded(True)
+        if type(value) is dict:
+            for key, val in sorted(value.items()):
+                child = QtWidgets.QTreeWidgetItem()
+                child.setText(0, str(key))
+                item.addChild(child)
+                self.fill_item(child, val, checkable=False)
+        # elif type(value) is list:
+        #     for val in value:
+        #         child = QtWidgets.QTreeWidgetItem()
+        #         item.addChild(child)
+        #         if type(val) is dict:      
+        #             child.setText(0, '[dict]')
+        #             self.fill_item(child, val, checkable=True)
+        #         elif type(val) is list:
+        #             child.setText(0, '[list]')
+        #             self.fill_item(child, val, checkable=True)
+        #         else:
+        #             child.setText(0, str(val))              
+        #         child.setExpanded(True)
+        elif type(value) is float or int:
+            child = self.createSpinBox(value)
+            item.treeWidget().setItemWidget(item, 1, child)
+            # Set immediate parent as checkable.
+            item_parent = item.parent()
+            item_parent_name =  item_parent.text(0)
+            top_categories = list(general_options.keys())
+            if item_parent_name not in top_categories:
+                if item_parent_name not in list(self.all_checkables.keys()):
+                    self.all_checkables[item_parent_name] = {}
+                item_parent.setFlags(item_parent.flags() | QtCore.Qt.ItemIsUserCheckable)
+                item_parent.setCheckState(0, QtCore.Qt.Unchecked)
+                item_parent.setExpanded(False)
+        else:
+            child = QtWidgets.QTreeWidgetItem()
+            child.setText(0, str(value))
+            item.addChild(child)
 
-        ToDo:
-        - Implement an automated method for N number of levels.
 
-        See:
-        - http://doc.qt.io/qt-5/qtreewidgetitem.html#flags
-        """
-        tree = treeWidget
-        tree.setHeaderHidden(False)
-        tree.setHeaderLabels(["Options", "Values"])
-        top_level_keys = list(data_options.keys())
-        for filter_name in top_level_keys:
-            # Build each Filter parent branch
-            parent = QtWidgets.QTreeWidgetItem(tree)
-            parent.setText(0, filter_name)
-            parent.setFlags(parent.flags() | QtCore.Qt.ItemIsUserCheckable)
-            parent.setCheckState(0, QtCore.Qt.Unchecked)
-            parameter_list = data_options[filter_name].keys()
-            for parameter_label in parameter_list:
-                # Read each customizable value
-                value = data_options[filter_name][parameter_label]
-                if isinstance(value, int):
-                    wid = QtWidgets.QSpinBox()
-                elif isinstance(value, float):
-                    wid = QtWidgets.QDoubleSpinBox()
-                    wid.setDecimals(4)
-                else:
-                    print("'"+str(value)+"' is not a valid value of '"+parameter_label+"' for a "+filter_name+" filter")
-                    break
-                # Build valid Spinboxes with corresponding labels and values
-                child = QtWidgets.QTreeWidgetItem(parent)
-                child.setText(0, parameter_label)
-                tree.addTopLevelItem(child) # Or parent? <---- Further test this
-                wid.setMaximum(250)
-                wid.setValue(value)
-                tree.setItemWidget(child, 1, wid)
+    def setupOptionsTree(self, widget, value):
+        widget.clear()
+        widget.setColumnCount(2)
+        widget.setHeaderLabels(["Options", "Values"])
+        root_item = widget.invisibleRootItem()
+        self.fill_item(root_item, value)
+        print(self.all_checkables)
+
+
+    def createSpinBox(self, value):
+        widgetSpinBox = None
+        if isinstance(value, int):
+            widgetSpinBox = QtWidgets.QSpinBox()
+        elif isinstance(value, float):
+            widgetSpinBox = QtWidgets.QDoubleSpinBox()
+            widgetSpinBox.setDecimals(4)
+        else:
+            print("  [ERROR] '"+str(value)+"' is not valid for SpinBoxes.")
+        # Set default values
+        if widgetSpinBox:
+            widgetSpinBox.setMaximum(250)
+            widgetSpinBox.setValue(value)
+        return widgetSpinBox
 
 
     def setupPlotWidgets(self):
@@ -242,15 +265,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tableWidget.setRowCount(num_files)
         for row in range(num_files):
             file_name = found_files[row]
+            item_file_name = QtGui.QTableWidgetItem( file_name )
+            item_file_name.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             item_num_lines = QtGui.QTableWidgetItem( str(self.quickCountLines(file_name)) )
-            item_num_lines.setTextAlignment(QtCore.Qt.AlignRight)
+            item_num_lines.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             item_num_cols = QtGui.QTableWidgetItem( str(self.quickCountColumns(file_name)) )
-            item_num_cols.setTextAlignment(QtCore.Qt.AlignRight)
+            item_num_cols.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             date_string = datetime.datetime.fromtimestamp(os.path.getctime(file_name)).strftime('%d.%m.%y %H:%M')
             item_date = QtGui.QTableWidgetItem( date_string )
-            item_date.setTextAlignment(QtCore.Qt.AlignRight)
+            item_date.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             # Populate Row with information of file
-            self.tableWidget.setItem(row, 0, QtGui.QTableWidgetItem(file_name))
+            self.tableWidget.setItem(row, 0, item_file_name)
             self.tableWidget.setItem(row, 1, item_num_lines)
             self.tableWidget.setItem(row, 2, item_num_cols)
             self.tableWidget.setItem(row, 3, item_date)
@@ -288,6 +313,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def estimatePose(self, data, algo='MadgwickMARG', params=[]):
         """estimatePose computes the Orientation of the frame, given the IMU data
         """
+        freq, beta = 100.0, 0.01
+        Kp, Ki = 0.1, 0.5
         acc = data.acc
         gyr = data.gyr
         mag = data.mag
@@ -295,8 +322,7 @@ class MainWindow(QtWidgets.QMainWindow):
         q = []
         if num_samples<1:
             return np.array(q)
-        if algo.startswith("Madgwick"):
-            beta, freq = 0.01, 100.0
+        if "Madgwick" in algo:
             if len(params)>1:
                 freq = params[1]
             if len(params)>0:
@@ -315,8 +341,7 @@ class MainWindow(QtWidgets.QMainWindow):
             elif "IMU" in algo:
                 for i in range(1,num_samples):
                     q.append( rb.Madgwick.updateIMU(acc[i,:], gyr[i,:], q[-1], beta, freq) )
-        elif algo.startswith("Mahony"):
-            freq, Kp, Ki = 100.0, 0.1, 0.5
+        if "Mahony" in algo:
             if len(params)>2:
                 freq = params[2]
             if len(params)>1:

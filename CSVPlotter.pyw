@@ -41,15 +41,6 @@ with open('data_options.dat', 'r') as f:
     read_lines = f.readlines()
 general_options = json.loads( ''.join(read_lines) )
 
-def count_levels(d):
-    return max(count_levels(v) if isinstance(v,dict) else 0 for v in d.values()) + 1
-
-dict_level_count = count_levels(general_options)
-# print("Levels:", dict_level_count)
-# pprint.pprint(general_options)
-
-# pose_Estimation_options = general_options["Pose Estimation"]
-
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -72,33 +63,104 @@ class MainWindow(QtWidgets.QMainWindow):
         if row>-1:
             print(" ")
             self.file2use = self.tableWidget.item(row,0).text()
-            # path2file = os.path.normpath(os.path.join(base_path, self.file2use))
             data = Data(self.file2use)
-            # data.printDatasetInfo()
             # Compute and Plot Quaternions
-            beta = 0.0029
-            if len(data.acc)>0:
-                # q = self.estimatePose(data, "MahonyIMU", [0.1, 0.5, 100])
-                # q = self.estimatePose(data, "MahonyMARG", [0.1, 0.5, 100])
-                q = self.estimatePose(data, "MadgwickIMU", [beta, 100.0])
-                # q = self.estimatePose(data, "MadgwickMARG", [beta, 100.0])
+            if data.num_samples>0:
+                # Update Plot Lines
+                self.updatePlots(data)
+                beta = 0.0029
+                test = {'MadgwickIMU': {'Beta':beta, 'Frequency':100.0}}
+                q = self.estimatePose(data, test)
                 if len(q)>0:
                     mse_errors = self.getMSE(data.qts, q)
                     mse_sum = np.mean(np.mean(mse_errors))
-                    mse_text = "MSE({:4.4f}) = {:1.4e}".format(beta,mse_sum)
+                    mse_text = "MSE = {:1.4e}".format(mse_sum)
                     print("   ", mse_text)
-                    # Update Plot Lines
-                    self.updatePlots(data)
+                    # Update Plots
                     self.plotData(self.graphicsView_5, q)
                     # self.plotData(self.graphicsView_6, mse_errors, clearPlot=True)
                     self.plotData(self.graphicsView_6, mse_errors)
-                    self.updateTextItem(self.graphicsView_6, mse_text)
+                    # self.updateTextItem(self.graphicsView_6, mse_text)
         self.statusBar.showMessage("Ready")
 
 
     @pyqtSlot(QtGui.QKeyEvent)
     def on_graphicsView_keyPressEvent(self):
         print("graphicsView was clicked")
+
+    @pyqtSlot(bool)
+    def on_pushButton_clicked(self):
+        print("\nButton REFRESH was pressed")
+        if len(self.file2use)>0:
+            tests = self.setTests()
+            tests_list = list(tests.keys())
+            for test_name in tests_list:
+                inputs = []
+                for key in tests[test_name].keys():
+                    inputs.append(key+"="+str(tests[test_name][key]))
+                inputs_text = "(" + ", ".join(inputs) + ")"
+                print("- " + test_name + inputs_text + ":")
+                mse_error = self.runTest(self.file2use, {test_name:tests[test_name]})
+                mse_sum = np.mean(np.mean(mse_error))
+                mse_text = "    MSE = {:1.4e}".format(mse_sum)
+                print(mse_text)
+
+
+    def runTest(self, fileName, test):
+        beta = 0.0029
+        mse_errors = 0
+        data = Data(self.file2use)
+        q = self.estimatePose(data, test)
+        if len(q)>0:
+            mse_errors = self.getMSE(data.qts, q)
+        return mse_errors
+
+
+    def setTests(self):
+        test_names = ["Mahony IMU", "Mahony MARG", "Madgwick IMU", "Madgwick MARG"]
+        tests = {}
+        non_checkable_opts = self.readNonCheckableOptions(self.treeWidget)
+        checked_options = self.readSelectedVariables(self.treeWidget)
+        if len(checked_options)<1:
+            return tests
+        dict_keys = list(checked_options.keys())
+        for test_name in dict_keys:
+            if test_name in test_names:
+                tests[test_name] = checked_options[test_name]
+                for key in non_checkable_opts.keys():
+                    tests[test_name][key] = non_checkable_opts[key]
+        return tests
+
+
+    def readSelectedVariables(self, tree):
+        checked_options = {}
+        variables_list = tree.findItems("", QtCore.Qt.MatchContains, 0)
+        for var in variables_list:
+            num_children = var.childCount()
+            for child_idx in range(num_children):
+                child = var.child(child_idx)
+                child_name = child.text(0)
+                if child.checkState(0):
+                    checked_options[child_name] = {}
+                    for i in range(child.childCount()):
+                        grandchild = child.child(i)
+                        checked_options[child_name][grandchild.text(0)] = tree.itemWidget(grandchild,1).value()
+        return checked_options
+
+    def readNonCheckableOptions(self, tree):
+        non_checkable_options = ["Sampling Properties"]
+        options = {}
+        variables_list = tree.findItems("", QtCore.Qt.MatchContains, 0)
+        for var in variables_list:
+            var_text = var.text(0)
+            if var_text in non_checkable_options:
+                var_children_num = var.childCount()
+                for child_idx in range(var_children_num):
+                    child = var.child(child_idx)
+                    child_name = child.text(0)
+                    child_value = tree.itemWidget(var.child(child_idx),1).value()
+                    options[child_name] = child_value
+        return options
 
 
     def quickCountLines(self, fileName):
@@ -119,14 +181,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setupOptionsTree(self.treeWidget, general_options)
 
 
-    def fill_item(self, item, value, checkable=False):
+    def fill_item(self, item, value):
         item.setExpanded(True)
         if type(value) is dict:
             for key, val in sorted(value.items()):
                 child = QtWidgets.QTreeWidgetItem()
                 child.setText(0, str(key))
                 item.addChild(child)
-                self.fill_item(child, val, checkable=False)
+                self.fill_item(child, val)
         # elif type(value) is list:
         #     for val in value:
         #         child = QtWidgets.QTreeWidgetItem()
@@ -165,7 +227,7 @@ class MainWindow(QtWidgets.QMainWindow):
         widget.setHeaderLabels(["Options", "Values"])
         root_item = widget.invisibleRootItem()
         self.fill_item(root_item, value)
-        print(self.all_checkables)
+        widget.resizeColumnToContents(0)
 
 
     def createSpinBox(self, value):
@@ -310,7 +372,8 @@ class MainWindow(QtWidgets.QMainWindow):
         return shadow
 
 
-    def estimatePose(self, data, algo='MadgwickMARG', params=[]):
+    # def estimatePose(self, data, algo='MadgwickMARG', params=[]):
+    def estimatePose(self, data, estimation_info):
         """estimatePose computes the Orientation of the frame, given the IMU data
         """
         freq, beta = 100.0, 0.01
@@ -319,17 +382,14 @@ class MainWindow(QtWidgets.QMainWindow):
         gyr = data.gyr
         mag = data.mag
         num_samples = data.num_samples
+        algo = list(estimation_info.keys())[0]
         q = []
         if num_samples<1:
             return np.array(q)
         if "Madgwick" in algo:
-            if len(params)>1:
-                freq = params[1]
-            if len(params)>0:
-                beta = params[0]
-            # Initial Pose is estimated with Accelerometer
-            q = [ np.array(rb.am2q(acc[0])) ]
-            # Choose INS architecture to use Madgwick's Algorithm with
+            freq = estimation_info[algo]['Frequency']
+            beta = estimation_info[algo]['Beta']
+            q = [ np.array(rb.am2q(acc[0])) ]   # Initial Pose estimation with Accelerometer
             if "MARG" in algo:
                 if len(mag)>0:
                     for i in range(1,num_samples):
@@ -342,15 +402,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 for i in range(1,num_samples):
                     q.append( rb.Madgwick.updateIMU(acc[i,:], gyr[i,:], q[-1], beta, freq) )
         if "Mahony" in algo:
-            if len(params)>2:
-                freq = params[2]
-            if len(params)>1:
-                Kp = params[1]
-            if len(params)>0:
-                Ki = params[0]
-            # Initial Pose is estimated with Accelerometer
-            q = [ np.array(rb.am2q(acc[0])) ]   # Initial Pose is estimated with Accelerometer
-            # Choose INS architecture to use Mahony's Algorithm with
+            freq = estimation_info[algo]['Frequency']
+            Kp = estimation_info[algo]['Kp']
+            Ki = estimation_info[algo]['Ki']
+            q = [ np.array(rb.am2q(acc[0])) ]   # Initial Pose estimation with Accelerometer
             if "MARG" in algo:
                 for i in range(1,num_samples):
                     q.append( rb.Mahony.updateMARG(acc[i,:], gyr[i,:], mag[i,:], q[-1], freq, Kp, Ki) )

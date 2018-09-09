@@ -61,26 +61,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.statusBar.showMessage("Reading File")
         row = self.tableWidget.currentRow()
         if row>-1:
-            print(" ")
             self.file2use = self.tableWidget.item(row,0).text()
             data = Data(self.file2use)
             # Compute and Plot Quaternions
             if data.num_samples>0:
                 # Update Plot Lines
                 self.updatePlots(data)
-                beta = 0.0029
-                test = {'MadgwickIMU': {'Beta':beta, 'Frequency':100.0}}
-                q = self.estimatePose(data, test)
-                if len(q)>0:
-                    mse_errors = self.getMSE(data.qts, q)
-                    mse_sum = np.mean(np.mean(mse_errors))
-                    mse_text = "MSE = {:1.4e}".format(mse_sum)
-                    print("   ", mse_text)
-                    # Update Plots
-                    self.plotData(self.graphicsView_5, q)
-                    # self.plotData(self.graphicsView_6, mse_errors, clearPlot=True)
-                    self.plotData(self.graphicsView_6, mse_errors)
-                    # self.updateTextItem(self.graphicsView_6, mse_text)
+                self.plotData(self.graphicsView_5, [])  # Estimated Quaternions
+                self.plotData(self.graphicsView_6, [])  # Errors
+                # Perform Computations with selected Algorithms
+                if len(self.readSelectedVariables(self.treeWidget))>0:
+                    tests = self.setTests()
+                    mse_errors = self.runAllTests(tests, data)
         self.statusBar.showMessage("Ready")
 
 
@@ -90,30 +82,38 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @pyqtSlot(bool)
     def on_pushButton_clicked(self):
-        print("\nButton REFRESH was pressed")
         if len(self.file2use)>0:
+            data = Data(self.file2use)
             tests = self.setTests()
-            tests_list = list(tests.keys())
-            for test_name in tests_list:
-                inputs = []
-                for key in tests[test_name].keys():
-                    inputs.append(key+"="+str(tests[test_name][key]))
-                inputs_text = "(" + ", ".join(inputs) + ")"
-                print("- " + test_name + inputs_text + ":")
-                mse_error = self.runTest(self.file2use, {test_name:tests[test_name]})
-                mse_sum = np.mean(np.mean(mse_error))
-                mse_text = "    MSE = {:1.4e}".format(mse_sum)
-                print(mse_text)
+            mse_errors = self.runAllTests(tests, data)
+        self.statusBar.showMessage("Ready")
 
 
-    def runTest(self, fileName, test):
-        beta = 0.0029
-        mse_errors = 0
-        data = Data(self.file2use)
+    def runAllTests(self, tests, data, plotLast=True):
+        tests_list = list(tests.keys())
+        for test_name in tests_list:
+            mse_mean = 0
+            se_errors = self.runTest(data, {test_name:tests[test_name]})
+            if len(se_errors)>0:
+                mse_mean = np.mean(se_errors)
+            input_vars = []
+            [ input_vars.append(key+"="+str(tests[test_name][key])) for key in tests[test_name].keys() ]
+            results_text = "{} ({} | {}) = {:1.4e}".format(test_name, data.file, ", ".join(input_vars), mse_mean)
+            print("-", results_text)
+        if plotLast and len(list(tests.keys()))>0:
+            q = self.estimatePose(data, {test_name:tests[test_name]})
+            self.plotData(self.graphicsView_5, q)
+            self.plotData(self.graphicsView_6, se_errors)
+            self.updateTextItem(self.graphicsView_6, results_text)
+        return se_errors
+
+
+    def runTest(self, data, test):
+        se_errors = []
         q = self.estimatePose(data, test)
-        if len(q)>0:
-            mse_errors = self.getMSE(data.qts, q)
-        return mse_errors
+        if len(q)>0 or len(data.qts)>0:
+            se_errors = self.squared_error(data.qts, q)
+        return se_errors
 
 
     def setTests(self):
@@ -328,7 +328,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for row in range(num_files):
             file_name = found_files[row]
             item_file_name = QtGui.QTableWidgetItem( file_name )
-            item_file_name.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            item_file_name.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
             item_num_lines = QtGui.QTableWidgetItem( str(self.quickCountLines(file_name)) )
             item_num_lines.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             item_num_cols = QtGui.QTableWidgetItem( str(self.quickCountColumns(file_name)) )
@@ -341,6 +341,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tableWidget.setItem(row, 1, item_num_lines)
             self.tableWidget.setItem(row, 2, item_num_cols)
             self.tableWidget.setItem(row, 3, item_date)
+        self.tableWidget.resizeColumnToContents(0)
 
 
     def getFiles(self, workspace):
@@ -372,7 +373,6 @@ class MainWindow(QtWidgets.QMainWindow):
         return shadow
 
 
-    # def estimatePose(self, data, algo='MadgwickMARG', params=[]):
     def estimatePose(self, data, estimation_info):
         """estimatePose computes the Orientation of the frame, given the IMU data
         """
@@ -421,17 +421,17 @@ class MainWindow(QtWidgets.QMainWindow):
         return np.array(q)
 
 
-    def getMSE(self, ref_values, values):
-        num_samples = np.shape(values)[0]
-        num_labels = np.shape(values)[1]
+    def squared_error(self, ref_values, values):
+        num_samples = np.shape(ref_values)[0]
+        num_labels = np.shape(ref_values)[1]
         mse = []
         for j in range(num_labels):
             line_errors = []
             for i in range(num_samples):
                 line_errors.append( (values[i,j]-ref_values[i,j])**2 )
             mse.append(line_errors)
-        mse_errors = np.array(mse) / num_samples
-        return np.transpose(mse_errors)
+        # mse_errors = np.array(mse) / num_samples
+        return np.transpose(mse)
 
 
     def selectColor(self, num_headers, all_colors):
@@ -545,6 +545,7 @@ class Data:
                 [headers.append(header.lstrip()) for header in read_data[0].strip().split(';')]
             # Read and store the data in a NumPy array
             [data.append( line.strip().split(';') ) for line in read_data[header_rows:]]    # Skip the first N lines
+            # print("Length:", len(data))
             data = np.array(data, dtype=data_type)
         except:
             data = np.array([], dtype=data_type)
@@ -626,7 +627,7 @@ class Data:
                     self.qts = data[:,indices[labels_list.index("Quaternions")]]
                     # q = rb.Quaternion(self.qts[0])
         except:
-            print("[WARN] No data to allocate.")
+            print("[WARN] File '{}' has no valid data to allocate.".format(self.file))
 
     def printDatasetInfo(self):
         print("\n- File:", self.file)

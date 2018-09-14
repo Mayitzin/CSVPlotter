@@ -20,15 +20,22 @@ import rigidbody as rb
 base_path = "./data"
 workspace = [base_path]
 
+# all_labels = {"repoIMU": {"Accelerometers":['IMU Acceleration_X', 'IMU Acceleration_Y', 'IMU Acceleration_Z'],
+#                          "Gyroscopes":['IMU Gyroscope_X', 'IMU Gyroscope_Y', 'IMU Gyroscope_Z'],
+#                          "Magnetometers":['IMU Magnetometer_X', 'IMU Magnetometer_Y', 'IMU Magnetometer_Z'],
+#                          "Quaternions":['Vicon Orientation_W', 'Vicon Orientation_X', 'Vicon Orientation_Y', 'Vicon Orientation_Z']
+#                         },
+#               "fcs_xsens": {"Accelerometers":['Acc_X', 'Acc_Y', 'Acc_Z'],
+#                             "Gyroscopes":['Gyr_X', 'Gyr_Y', 'Gyr_Z'],
+#                             "Quaternions":['Quat_q0', 'Quat_q1', 'Quat_q2', 'Quat_q3']
+#                            }
+#              }
+
 all_labels = {"repoIMU": {"Accelerometers":['IMU Acceleration_X', 'IMU Acceleration_Y', 'IMU Acceleration_Z'],
                          "Gyroscopes":['IMU Gyroscope_X', 'IMU Gyroscope_Y', 'IMU Gyroscope_Z'],
                          "Magnetometers":['IMU Magnetometer_X', 'IMU Magnetometer_Y', 'IMU Magnetometer_Z'],
                          "Quaternions":['Vicon Orientation_W', 'Vicon Orientation_X', 'Vicon Orientation_Y', 'Vicon Orientation_Z']
-                        },
-              "fcs_xsens": {"Accelerometers":['Acc_X', 'Acc_Y', 'Acc_Z'],
-                            "Gyroscopes":['Gyr_X', 'Gyr_Y', 'Gyr_Z'],
-                            "Quaternions":['Quat_q0', 'Quat_q1', 'Quat_q2', 'Quat_q3']
-                           }
+                        }
              }
 
 plotting_options = ["Grid-X","Label-X","Values-X","Grid-Y","Label-Y","Values-Y","ShowTitle"]
@@ -67,6 +74,9 @@ class MainWindow(QtWidgets.QMainWindow):
             if data.num_samples>0:
                 # Update Plot Lines
                 self.updatePlots(data)
+                print("Updated Plots")
+                for item in self.graphicsView.plotItem.getViewBox().addedItems:
+                    print(item)
                 self.plotData(self.graphicsView_5, [])  # Estimated Quaternions
                 self.plotData(self.graphicsView_6, [])  # Errors
                 # Perform Computations with selected Algorithms
@@ -248,12 +258,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def setupPlotWidgets(self):
         # self.graphicsView.setBackground(background=None)
-        self.graphicsView.setAntialiasing(True)
-        self.graphicsView.showAxis('bottom', False)
+        # self.graphicsView.setAntialiasing(True)
+        # self.graphicsView.showAxis('bottom', False)
         self.graphicsView.enableAutoRange()
         self.graphicsView.setTitle("Acceleration")
-        # self.graphicsView.setTitle("<span style='font-size: 8pt'>Acceleration</span>")
-        # "<span style='font-size: 2pt'>"
         # self.graphicsView_2.setBackground(background=None)
         self.graphicsView_2.setAntialiasing(True)
         self.graphicsView_2.showAxis('bottom', False)
@@ -293,7 +301,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Add region
         region = pg.LinearRegionItem()
         region.setZValue(10)
-        region.sigRegionChanged.connect(lambda: self.updateCoords(region))
+        # region.sigRegionChanged.connect(lambda: self.updateCoords(region))
         # Add ROI to Plot Widget
         self.graphicsView_7.addItem(region, ignoreBounds=True)
 
@@ -482,19 +490,20 @@ class MainWindow(QtWidgets.QMainWindow):
             return 
         if len(data2plot)<1:
             data2plot = list(range(np.shape(data)[1]))
+            print("It does not know the length of data:", data2plot)
         if clearPlot:
             plotWidget.clear()
         try:
             used_colors = colors[:len(data2plot)]
-            if len(data2plot)==4:
-                used_colors = [colors[6]] + colors[:len(data2plot)]
+            # if len(data2plot)==4:
+            #     used_colors = [colors[6]] + colors[:len(data2plot)]
             for index in data2plot:
                 line_data = data[:,index]
                 self.plotDataLine(plotWidget, line_data, lineStyle, used_colors[index])
             plotWidget.getViewBox().setAspectLocked(lock=False)
             plotWidget.autoRange()
             # Add Grid
-            plotWidget.showGrid(x=True, y=True)
+            # plotWidget.showGrid(x=True, y=True)
             # plotWidget.showGrid(x=current_settings["Grid-X"], y=current_settings["Grid-Y"])
         except:
             QtGui.QMessageBox.warning(self, "Invalid File", "The selected file does not have valid data.")
@@ -503,19 +512,34 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def updatePlots(self, data):
         # Get and Plot Shadow
-        self.updateLookupGraph(data.acc)
+        # self.updateLookupGraph(data.acc)
+        print("Accelerations", np.shape(data.acc), "\n", data.acc[:3])
+        # self.graphicsView.plot(data.acc[:,0])
         self.plotData(self.graphicsView, data.acc)
+        # print(self.graphicsView.plotItem.getViewBox().state)
+        # print(self.graphicsView.plotItem.getViewBox().addedItems)
+        print("Data is type", type(data.acc))
+        for item in self.graphicsView.plotItem.getViewBox().addedItems:
+            if item.opts['data'] is None:
+                new_data = data.acc[:,0]
+                print("New data is", np.shape(new_data))
+                item.setData(new_data)
+                # self.graphicsView.plot(new_data)
+                print(item, ":", item.opts['data'])
         self.plotData(self.graphicsView_2, data.gyr)
         self.plotData(self.graphicsView_3, data.mag)
         self.plotData(self.graphicsView_4, data.qts)
+        print("All plots are updated")
 
 
 class Data:
     def __init__(self, fileName):
         self.file = fileName
         self.data, self.headers = self.getData(self.file)
+        # print(self.headers)
         self.num_samples = len(self.data)
         self.labels, self.indices = self.idLabelGroups(self.headers)
+        # print("\n", self.labels, "\n", self.indices)
         self.acc, self.gyr, self.mag, self.qts = [], [], [], []
         self.allotData(self.data, self.labels, self.indices)
 
@@ -589,18 +613,40 @@ class Data:
     def idLabelGroups(self, found_headers, single_group=True):
         labels2use = []
         all_group_indices = []
+        # for dset_lbl in all_labels:
+        #     all_group_labels = []
+        #     group_indices = []
+        #     headers_keys = list(all_labels[dset_lbl].keys())
+        #     for i in range(len(headers_keys)):
+        #         header_group = headers_keys[i]
+        #         group_labels = all_labels[dset_lbl][header_group]
+        #         group_indices.append(self.matchIndices(found_headers, group_labels))
+        #         all_group_labels += group_labels
+        #     if all(x in found_headers for x in all_group_labels):
+        #         labels2use.append(dset_lbl)
+        #         all_group_indices.append(group_indices)
+        # if single_group and len(labels2use)>0:
+        #     return all_labels[labels2use[0]].copy(), all_group_indices[0]
+        # else:
+        #     return labels2use, all_group_indices
+        data_info = {}
         for dset_lbl in all_labels:
             all_group_labels = []
             group_indices = []
             headers_keys = list(all_labels[dset_lbl].keys())
             for i in range(len(headers_keys)):
                 header_group = headers_keys[i]
+                data_info[header_group] = {}
                 group_labels = all_labels[dset_lbl][header_group]
+                # print(header_group, ":", group_labels)
                 group_indices.append(self.matchIndices(found_headers, group_labels))
                 all_group_labels += group_labels
+                data_info[header_group]["labels"] = group_labels
+                data_info[header_group]["indices"] = group_indices[i]
             if all(x in found_headers for x in all_group_labels):
                 labels2use.append(dset_lbl)
                 all_group_indices.append(group_indices)
+        # print(data_info)
         if single_group and len(labels2use)>0:
             return all_labels[labels2use[0]].copy(), all_group_indices[0]
         else:

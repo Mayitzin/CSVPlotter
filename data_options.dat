@@ -8,7 +8,7 @@
         "Madgwick IMU":{"Beta":0.01},
         "Madgwick MARG":{"Beta":0.01}
     },
-    "Filters":{
+    "Signal Smoothing":{
         "Median":{"window_size":3},
         "Low-Pass":{"sampling_freq":200.0, "order":3, "cutoff":25.0},
         "Gaussian":{"sigma":1.0},

@@ -11,7 +11,7 @@ import json
 from PyQt5 import QtGui, uic, QtWidgets, QtCore
 from PyQt5.QtCore import pyqtSlot
 import pyqtgraph as pg
-import pprint
+import pyqtgraph.opengl as gl
 
 # Using module 'rigidbody' from repository 'Robotics' to compute Orientations
 sys.path.insert(0, '../Robotics/Motion')
@@ -74,11 +74,9 @@ class MainWindow(QtWidgets.QMainWindow):
             if data.num_samples>0:
                 # Update Plot Lines
                 self.updatePlots(data)
-                print("Updated Plots")
-                for item in self.graphicsView.plotItem.getViewBox().addedItems:
-                    print(item)
                 self.plotData(self.graphicsView_5, [])  # Estimated Quaternions
                 self.plotData(self.graphicsView_6, [])  # Errors
+                self.showFrames(self.new_3d_widget, data.qts)
                 # Perform Computations with selected Algorithms
                 if len(self.readSelectedVariables(self.treeWidget))>0:
                     tests = self.setTests()
@@ -189,6 +187,62 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plot_settings = dict.fromkeys(plotting_options, True)
         self.setupPlotWidgets()
         self.setupOptionsTree(self.treeWidget, general_options)
+        # Setup 3D Widget
+        self.new_3d_widget = gl.GLViewWidget()
+        self.setup3DWidget(self.new_3d_widget)
+        self.showPlane(self.new_3d_widget)
+        # self.showFrames(self.new_3d_widget)
+
+
+    def setup3DWidget(self, new_widget):
+        tab_layout = self.tabWidget.widget(2).layout()
+        tab_layout.removeWidget(self.graphicsView_8)
+        self.graphicsView_8.hide()
+        tab_layout.addWidget(new_widget, 0, 0)
+        # Set position of camera
+        new_widget.opts['distance'] = 0.5
+        
+    def showPlane(self, plotWidget, plane="Z", shift=0.0):
+        if plane in ["X", "Y", "Z"]:
+            planeItem = gl.GLGridItem()
+            if plane == "X":
+                planeItem.rotate(90, 0, 1, 0)
+                planeItem.translate(shift, 0, 0)
+            if plane == "Y":
+                planeItem.rotate(90, 1, 0, 0)
+                planeItem.translate(0, shift, 0)
+            if plane == "Z":
+                planeItem.translate(0, 0, shift)
+            plotWidget.addItem(planeItem)
+
+    def showFrames(self, plotWidget, quaternions=[], locus=[], num_frames=5, ax_len=0.1):
+        """plotFrames will show 3D frames describing the pose of the device
+        along the reconstructed trajectory.
+
+        plotWidget  is the given Axes element of the plotting canvas. It must be
+                    a 3D plotting canvas.
+        quaternions is an N-by-4 array with N sampled (or computed) Quaternions.
+        num_frames  is the number of frames to be plot. Default is 5.
+        ax_len      is the length of the axes in each frame. Default is 0.1.
+        """
+        colors = [(1.0,0.0,0.0,1.0), (0.0,1.0,0.0,1.0), (0.0,0.0,1.0,1.0)]
+        num_samples = len(quaternions)
+        if num_samples<1:
+            quaternions = [[1., 0., 0., 0.]]
+            locus = [[0., 0., 0.]]
+            num_frames = 1
+        if len(locus)<1:
+            locus = np.zeros((num_samples, 3))
+        # Plot frames
+        for i in np.linspace(0, num_samples-1, num_frames, dtype='int'):
+            R = rb.q2R(quaternions[i])
+            t = np.array(locus[i])
+            for j in range(len(colors)):
+                axis_begin = np.array([t[0], t[1], t[2]])
+                axis_end = np.array([R[j,0]*ax_len+t[0], R[j,1]*ax_len+t[1], R[j,2]*ax_len+t[2]])
+                axis_array = np.vstack((axis_begin, axis_end))
+                axis_item = gl.GLLinePlotItem(pos=axis_array, color=colors[j])
+                plotWidget.addItem(axis_item)
 
 
     def fill_item(self, item, value):
@@ -232,12 +286,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def setupOptionsTree(self, widget, value):
+        headers = ["Options", "Values"]
+        num_columns = len(headers)
         widget.clear()
-        widget.setColumnCount(2)
-        widget.setHeaderLabels(["Options", "Values"])
+        widget.setColumnCount(num_columns)
+        widget.setHeaderLabels(headers)
         root_item = widget.invisibleRootItem()
         self.fill_item(root_item, value)
         widget.resizeColumnToContents(0)
+        # Darken Top Level Rows
+        c = [100,100,100,100]   # Color
+        for index in range(widget.topLevelItemCount()):
+            for column in range(num_columns):
+                widget.topLevelItem(index).setBackground(column, QtGui.QColor(c[0], c[1], c[2], c[3]))
 
 
     def createSpinBox(self, value):
@@ -258,7 +319,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def setupPlotWidgets(self):
         # self.graphicsView.setBackground(background=None)
-        # self.graphicsView.setAntialiasing(True)
+        self.graphicsView.setAntialiasing(True)
         # self.graphicsView.showAxis('bottom', False)
         self.graphicsView.enableAutoRange()
         self.graphicsView.setTitle("Acceleration")
@@ -461,14 +522,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def updateTextItem(self, plotWidget, text=""):
-        # label = pg.LabelItem(justify='center')
-        # label.setText(formatted_text)
-        # plotWidget.addItem(label)
-        # print("label._sizeHint", label._sizeHint)
-        # print("label.opts", label.opts)
-        # print("label.item", label.item)
-        # print("label.itemRect()", label.itemRect())
-        
         formatted_text = text
         # formatted_text = "<span style='font-size: 2pt'>" + text + "</span>"
         # scene_width = plotWidget.viewRect().top()
@@ -490,21 +543,19 @@ class MainWindow(QtWidgets.QMainWindow):
             return 
         if len(data2plot)<1:
             data2plot = list(range(np.shape(data)[1]))
-            print("It does not know the length of data:", data2plot)
         if clearPlot:
             plotWidget.clear()
         try:
             used_colors = colors[:len(data2plot)]
-            # if len(data2plot)==4:
-            #     used_colors = [colors[6]] + colors[:len(data2plot)]
+            if len(data2plot)==4:
+                used_colors = [colors[6]] + colors[:len(data2plot)]
             for index in data2plot:
                 line_data = data[:,index]
                 self.plotDataLine(plotWidget, line_data, lineStyle, used_colors[index])
             plotWidget.getViewBox().setAspectLocked(lock=False)
             plotWidget.autoRange()
             # Add Grid
-            # plotWidget.showGrid(x=True, y=True)
-            # plotWidget.showGrid(x=current_settings["Grid-X"], y=current_settings["Grid-Y"])
+            plotWidget.showGrid(x=current_settings["Grid-X"], y=current_settings["Grid-Y"])
         except:
             QtGui.QMessageBox.warning(self, "Invalid File", "The selected file does not have valid data.")
         self.plot_settings = current_settings.copy()
@@ -512,34 +563,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def updatePlots(self, data):
         # Get and Plot Shadow
-        # self.updateLookupGraph(data.acc)
-        print("Accelerations", np.shape(data.acc), "\n", data.acc[:3])
-        # self.graphicsView.plot(data.acc[:,0])
         self.plotData(self.graphicsView, data.acc)
-        # print(self.graphicsView.plotItem.getViewBox().state)
-        # print(self.graphicsView.plotItem.getViewBox().addedItems)
-        print("Data is type", type(data.acc))
-        for item in self.graphicsView.plotItem.getViewBox().addedItems:
-            if item.opts['data'] is None:
-                new_data = data.acc[:,0]
-                print("New data is", np.shape(new_data))
-                item.setData(new_data)
-                # self.graphicsView.plot(new_data)
-                print(item, ":", item.opts['data'])
         self.plotData(self.graphicsView_2, data.gyr)
         self.plotData(self.graphicsView_3, data.mag)
         self.plotData(self.graphicsView_4, data.qts)
-        print("All plots are updated")
 
 
 class Data:
     def __init__(self, fileName):
         self.file = fileName
         self.data, self.headers = self.getData(self.file)
-        # print(self.headers)
         self.num_samples = len(self.data)
         self.labels, self.indices = self.idLabelGroups(self.headers)
-        # print("\n", self.labels, "\n", self.indices)
         self.acc, self.gyr, self.mag, self.qts = [], [], [], []
         self.allotData(self.data, self.labels, self.indices)
 

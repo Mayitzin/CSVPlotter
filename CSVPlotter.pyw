@@ -76,6 +76,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.updatePlots(data)
                 self.plotData(self.graphicsView_5, [])  # Estimated Quaternions
                 self.plotData(self.graphicsView_6, [])  # Errors
+                # Re-draw 3D
+                # Reset GL Widget
+                self.new_3d_widget.deleteLater()
+                self.new_3d_widget = gl.GLViewWidget()
+                self.setup3DWidget(self.new_3d_widget)
+                self.showPlane(self.new_3d_widget)
                 self.showFrames(self.new_3d_widget, data.qts)
                 # Perform Computations with selected Algorithms
                 if len(self.readSelectedVariables(self.treeWidget))>0:

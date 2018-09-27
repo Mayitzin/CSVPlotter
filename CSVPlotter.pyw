@@ -20,34 +20,19 @@ import rigidbody as rb
 base_path = "./data"
 workspace = [base_path]
 
-# all_labels = {"repoIMU": {"Accelerometers":['IMU Acceleration_X', 'IMU Acceleration_Y', 'IMU Acceleration_Z'],
-#                          "Gyroscopes":['IMU Gyroscope_X', 'IMU Gyroscope_Y', 'IMU Gyroscope_Z'],
-#                          "Magnetometers":['IMU Magnetometer_X', 'IMU Magnetometer_Y', 'IMU Magnetometer_Z'],
-#                          "Quaternions":['Vicon Orientation_W', 'Vicon Orientation_X', 'Vicon Orientation_Y', 'Vicon Orientation_Z']
-#                         },
-#               "fcs_xsens": {"Accelerometers":['Acc_X', 'Acc_Y', 'Acc_Z'],
-#                             "Gyroscopes":['Gyr_X', 'Gyr_Y', 'Gyr_Z'],
-#                             "Quaternions":['Quat_q0', 'Quat_q1', 'Quat_q2', 'Quat_q3']
-#                            }
-#              }
-
-all_labels = {"repoIMU": {"Accelerometers":['IMU Acceleration_X', 'IMU Acceleration_Y', 'IMU Acceleration_Z'],
-                         "Gyroscopes":['IMU Gyroscope_X', 'IMU Gyroscope_Y', 'IMU Gyroscope_Z'],
-                         "Magnetometers":['IMU Magnetometer_X', 'IMU Magnetometer_Y', 'IMU Magnetometer_Z'],
-                         "Quaternions":['Vicon Orientation_W', 'Vicon Orientation_X', 'Vicon Orientation_Y', 'Vicon Orientation_Z']
-                        }
-             }
-
 plotting_options = ["Grid-X","Label-X","Values-X","Grid-Y","Label-Y","Values-Y","ShowTitle"]
 # Set default List of Colors
 colors = [(255,0,0,255),(0,255,0,255),(60,60,255,255),          # Red, Green, Blue
           (120,0,0,255),(0,100,0,255),(0,0,150,255),            # Dark Red, Dark Green, Dark Blue
           (215,215,0,255),(150,150,0,255),(125,125,125,255)  ]  # Yellow, Dark Yellow, Gray
 
-with open('data_options.dat', 'r') as f:
-    read_lines = f.readlines()
-general_options = json.loads( ''.join(read_lines) )
+def json2dict(fileName):
+    with open(fileName, 'r') as f:
+        read_lines = f.readlines()
+    return json.loads( ''.join(read_lines) )
 
+all_labels = json2dict('labels.dat')
+general_options = json2dict('data_options.dat')
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -82,7 +67,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.new_3d_widget = gl.GLViewWidget()
                 self.setup3DWidget(self.new_3d_widget)
                 self.showPlane(self.new_3d_widget)
-                self.showFrames(self.new_3d_widget, data.qts)
+                self.showFrames(self.new_3d_widget, data.qts, data.pos)
                 # Perform Computations with selected Algorithms
                 if len(self.readSelectedVariables(self.treeWidget))>0:
                     tests = self.setTests()
@@ -105,6 +90,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def runAllTests(self, tests, data, plotLast=True):
         tests_list = list(tests.keys())
+        se_errors = np.array([])
         for test_name in tests_list:
             mse_mean = 0
             se_errors = self.runTest(data, {test_name:tests[test_name]})
@@ -123,15 +109,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def runTest(self, data, test):
-        se_errors = []
+        errors = []
         q = self.estimatePose(data, test)
         if len(q)>0 or len(data.qts)>0:
-            se_errors = self.squared_error(data.qts, q)
-        return se_errors
+            errors = self.squared_error(data.qts, q)
+        return errors
 
 
     def setTests(self):
-        test_names = ["Mahony IMU", "Mahony MARG", "Madgwick IMU", "Madgwick MARG"]
+        test_names = list(general_options["Pose Estimation"].keys())
         tests = {}
         non_checkable_opts = self.readNonCheckableOptions(self.treeWidget)
         checked_options = self.readSelectedVariables(self.treeWidget)
@@ -237,6 +223,11 @@ class MainWindow(QtWidgets.QMainWindow):
             quaternions = [[1., 0., 0., 0.]]
             locus = [[0., 0., 0.]]
             num_frames = 1
+        else:
+            if len(quaternions[0])<1:
+                quaternions = [[1., 0., 0., 0.]]
+                locus = [[0., 0., 0.]]
+                num_frames = 1
         if len(locus)<1:
             locus = np.zeros((num_samples, 3))
         # Plot frames
@@ -249,6 +240,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 axis_array = np.vstack((axis_begin, axis_end))
                 axis_item = gl.GLLinePlotItem(pos=axis_array, color=colors[j])
                 plotWidget.addItem(axis_item)
+        # Show body trace
+        body_item = gl.GLLinePlotItem(pos=locus, color=(0.5,0.5,0.5,0.5))
+        plotWidget.addItem(body_item)
 
 
     def fill_item(self, item, value):
@@ -259,19 +253,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 child.setText(0, str(key))
                 item.addChild(child)
                 self.fill_item(child, val)
-        # elif type(value) is list:
-        #     for val in value:
-        #         child = QtWidgets.QTreeWidgetItem()
-        #         item.addChild(child)
-        #         if type(val) is dict:      
-        #             child.setText(0, '[dict]')
-        #             self.fill_item(child, val, checkable=True)
-        #         elif type(val) is list:
-        #             child.setText(0, '[list]')
-        #             self.fill_item(child, val, checkable=True)
-        #         else:
-        #             child.setText(0, str(val))              
-        #         child.setExpanded(True)
         elif type(value) is float or int:
             child = self.createSpinBox(value)
             item.treeWidget().setItemWidget(item, 1, child)
@@ -318,7 +299,7 @@ class MainWindow(QtWidgets.QMainWindow):
             print("  [ERROR] '"+str(value)+"' is not valid for SpinBoxes.")
         # Set default values
         if widgetSpinBox:
-            widgetSpinBox.setMaximum(250)
+            widgetSpinBox.setMaximum(1000)
             widgetSpinBox.setValue(value)
         return widgetSpinBox
 
@@ -465,6 +446,7 @@ class MainWindow(QtWidgets.QMainWindow):
             freq = estimation_info[algo]['Frequency']
             beta = estimation_info[algo]['Beta']
             q = [ np.array(rb.am2q(acc[0])) ]   # Initial Pose estimation with Accelerometer
+            # q = [ np.array([1., 0., 0., 0.]) ]
             if "MARG" in algo:
                 if len(mag)>0:
                     for i in range(1,num_samples):
@@ -487,10 +469,10 @@ class MainWindow(QtWidgets.QMainWindow):
             if "IMU" in algo:
                 for i in range(1,num_samples):
                     q.append( rb.Mahony.updateIMU(acc[i,:], gyr[i,:], q[-1], freq, Kp, Ki) )
-        elif algo=="Gravity":
+        if algo=="Gravity":
             for i in range(num_samples):
                 q.append( rb.am2q(acc[i,:]) )
-        elif algo=="IMU":
+        if "Geomagnetic" in algo:
             for i in range(num_samples):
                 q.append( rb.am2q(acc[i,:], mag[i,:]) )
         return np.array(q)
@@ -580,9 +562,14 @@ class Data:
         self.file = fileName
         self.data, self.headers = self.getData(self.file)
         self.num_samples = len(self.data)
-        self.labels, self.indices = self.idLabelGroups(self.headers)
-        self.acc, self.gyr, self.mag, self.qts = [], [], [], []
-        self.allotData(self.data, self.labels, self.indices)
+        self.header_info = self.idLabelGroups(self.headers)
+        self.acc, self.gyr, self.mag, self.qts, self.pos = [], [], [], [], []
+        self.allotData(self.data, self.header_info)
+        # self.frequency = 100.0
+        # if "timestamp_imu" in self.headers:
+        #     timer_idx = self.headers.index("timestamp_imu")
+        #     self.frequency = self.idFrequency(self.data, timer_index=timer_idx, units='s')
+        #     print(self.frequency)
 
     def getData(self, fileName, data_type='float'):
         """getData reads the data stored in a CSV file, returns a numPy array of
@@ -610,7 +597,6 @@ class Data:
                 [headers.append(header.lstrip()) for header in read_data[0].strip().split(';')]
             # Read and store the data in a NumPy array
             [data.append( line.strip().split(';') ) for line in read_data[header_rows:]]    # Skip the first N lines
-            # print("Length:", len(data))
             data = np.array(data, dtype=data_type)
         except:
             data = np.array([], dtype=data_type)
@@ -654,22 +640,6 @@ class Data:
     def idLabelGroups(self, found_headers, single_group=True):
         labels2use = []
         all_group_indices = []
-        # for dset_lbl in all_labels:
-        #     all_group_labels = []
-        #     group_indices = []
-        #     headers_keys = list(all_labels[dset_lbl].keys())
-        #     for i in range(len(headers_keys)):
-        #         header_group = headers_keys[i]
-        #         group_labels = all_labels[dset_lbl][header_group]
-        #         group_indices.append(self.matchIndices(found_headers, group_labels))
-        #         all_group_labels += group_labels
-        #     if all(x in found_headers for x in all_group_labels):
-        #         labels2use.append(dset_lbl)
-        #         all_group_indices.append(group_indices)
-        # if single_group and len(labels2use)>0:
-        #     return all_labels[labels2use[0]].copy(), all_group_indices[0]
-        # else:
-        #     return labels2use, all_group_indices
         data_info = {}
         for dset_lbl in all_labels:
             all_group_labels = []
@@ -679,7 +649,6 @@ class Data:
                 header_group = headers_keys[i]
                 data_info[header_group] = {}
                 group_labels = all_labels[dset_lbl][header_group]
-                # print(header_group, ":", group_labels)
                 group_indices.append(self.matchIndices(found_headers, group_labels))
                 all_group_labels += group_labels
                 data_info[header_group]["labels"] = group_labels
@@ -687,11 +656,7 @@ class Data:
             if all(x in found_headers for x in all_group_labels):
                 labels2use.append(dset_lbl)
                 all_group_indices.append(group_indices)
-        # print(data_info)
-        if single_group and len(labels2use)>0:
-            return all_labels[labels2use[0]].copy(), all_group_indices[0]
-        else:
-            return labels2use, all_group_indices
+        return data_info
 
     def matchIndices(self, all_headers, requested_headers):
         requested_indices = []
@@ -700,21 +665,31 @@ class Data:
                 requested_indices.append(all_headers.index(header))
         return requested_indices
 
-    def allotData(self, data, labels, indices):
+    def allotData(self, data, header_info):
         try:
-            labels_list = list(labels.keys())
+            labels_list = list(header_info.keys())
             for label in labels_list:
                 if label == "Accelerometers":
-                    self.acc = data[:,indices[labels_list.index("Accelerometers")]]
+                    self.acc = data[:,header_info["Accelerometers"]["indices"]]
                 if label == "Gyroscopes":
-                    self.gyr = data[:,indices[labels_list.index("Gyroscopes")]]
+                    self.gyr = data[:,header_info["Gyroscopes"]["indices"]]
                 if label == "Magnetometers":
-                    self.mag = data[:,indices[labels_list.index("Magnetometers")]]
+                    self.mag = data[:,header_info["Magnetometers"]["indices"]]
                 if label == "Quaternions":
-                    self.qts = data[:,indices[labels_list.index("Quaternions")]]
-                    # q = rb.Quaternion(self.qts[0])
+                    self.qts = data[:,header_info["Quaternions"]["indices"]]
+                if label == "Position":
+                    self.pos = data[:,header_info["Position"]["indices"]]
         except:
             print("[WARN] File '{}' has no valid data to allocate.".format(self.file))
+
+    def idFrequency(self, data_array, timer_index=0, units='s'):
+        timestamps = data_array[:,timer_index]
+        diffs = np.diff(timestamps)
+        mean = np.mean(diffs)
+        if units=='ms':
+            mean /= 1000.0
+        return 1.0 / mean
+
 
     def printDatasetInfo(self):
         print("\n- File:", self.file)

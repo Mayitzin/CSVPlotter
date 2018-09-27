@@ -1,0 +1,19 @@
+{
+    "repoIMU":{
+        "Accelerometers":["IMU Acceleration_X", "IMU Acceleration_Y", "IMU Acceleration_Z"],
+        "Gyroscopes":["IMU Gyroscope_X", "IMU Gyroscope_Y", "IMU Gyroscope_Z"],
+        "Magnetometers":["IMU Magnetometer_X", "IMU Magnetometer_Y", "IMU Magnetometer_Z"],
+        "Quaternions":["Vicon Orientation_W", "Vicon Orientation_X", "Vicon Orientation_Y", "Vicon Orientation_Z"]
+    },
+    "fcs_xsens":{
+        "Accelerometers":["Acc_X", "Acc_Y", "Acc_Z"],
+        "Gyroscopes":["Gyr_X", "Gyr_Y", "Gyr_Z"],
+        "Quaternions":["Quat_q0", "Quat_q1", "Quat_q2", "Quat_q3"]
+    },
+    "eth":{
+        "Accelerometers":["ax", "ay", "az"],
+        "Gyroscopes":["gx", "gy", "gz"],
+        "Position":["px", "py", "pz"],
+        "Quaternions":["qw", "qx", "qy", "qz"]
+    }
+}

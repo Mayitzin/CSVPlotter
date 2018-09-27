@@ -6,7 +6,9 @@
         "Mahony IMU":{"Kp":0.1, "Ki":0.5},
         "Mahony MARG":{"Kp":0.1, "Ki":0.5},
         "Madgwick IMU":{"Beta":0.01},
-        "Madgwick MARG":{"Beta":0.01}
+        "Madgwick MARG":{"Beta":0.01},
+        "Gravity":{"gravity":9.81},
+        "Gravity-Geomagnetic":{"gravity":9.81}
     },
     "Signal Smoothing":{
         "Median":{"window_size":3},

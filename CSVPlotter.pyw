@@ -40,6 +40,7 @@ class MainWindow(QtWidgets.QMainWindow):
         uic.loadUi('mainwindow.ui', self)
         # Remove QBasicTimer error by ensuring Application quits at right time.
         self.all_data, self.indices = [], []
+        self.data = None
         self.all_checkables = {}
         self.file2use = ""
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
@@ -55,23 +56,25 @@ class MainWindow(QtWidgets.QMainWindow):
         if row>-1:
             self.file2use = self.tableWidget.item(row,0).text()
             data = Data(self.file2use)
+            self.data = data
             # Compute and Plot Quaternions
             if data.num_samples>0:
                 # Update Plot Lines
                 self.updatePlots(data)
                 self.plotData(self.graphicsView_5, [])  # Estimated Quaternions
                 self.plotData(self.graphicsView_6, [])  # Errors
-                # Re-draw 3D
-                # Reset GL Widget
+                # Re-draw 3D. Reset GL Widget
                 self.new_3d_widget.deleteLater()
                 self.new_3d_widget = gl.GLViewWidget()
                 self.setup3DWidget(self.new_3d_widget)
                 self.showPlane(self.new_3d_widget)
-                self.showFrames(self.new_3d_widget, data.qts, data.pos)
+                self.showFrames(self.new_3d_widget, data.qts, data.pos, num_frames=10)
                 # Perform Computations with selected Algorithms
                 if len(self.readSelectedVariables(self.treeWidget))>0:
                     tests = self.setTests()
                     mse_errors = self.runAllTests(tests, data)
+                # Update MiniMap
+                self.updateLookupGraph(data)
         self.statusBar.showMessage("Ready")
 
 
@@ -82,9 +85,8 @@ class MainWindow(QtWidgets.QMainWindow):
     @pyqtSlot(bool)
     def on_pushButton_clicked(self):
         if len(self.file2use)>0:
-            data = Data(self.file2use)
             tests = self.setTests()
-            mse_errors = self.runAllTests(tests, data)
+            mse_errors = self.runAllTests(tests, self.data)
         self.statusBar.showMessage("Ready")
 
 
@@ -170,11 +172,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def quickCountColumns(self, fileName, separator=';'):
         with open(fileName, 'r') as f:
             read_line = f.readline()
-        num_columns = len( read_line.strip().split(separator) )
-        return num_columns
+        return len( read_line.strip().split(separator) )
 
 
     def setupWidgets(self):
+        self.splitter.setStretchFactor(1,5)
+        self.splitter_2.setStretchFactor(6,1)
         self.tableWidget.setHorizontalHeaderLabels(["File", "Lines", "Columns", "Created", "Notes"])
         self.plot_settings = dict.fromkeys(plotting_options, True)
         self.setupPlotWidgets()
@@ -183,7 +186,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.new_3d_widget = gl.GLViewWidget()
         self.setup3DWidget(self.new_3d_widget)
         self.showPlane(self.new_3d_widget)
-        # self.showFrames(self.new_3d_widget)
 
 
     def setup3DWidget(self, new_widget):
@@ -192,7 +194,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.graphicsView_8.hide()
         tab_layout.addWidget(new_widget, 0, 0)
         # Set position of camera
-        new_widget.opts['distance'] = 0.5
+        new_widget.opts['distance'] = 3.0
         
     def showPlane(self, plotWidget, plane="Z", shift=0.0):
         if plane in ["X", "Y", "Z"]:
@@ -253,6 +255,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 child.setText(0, str(key))
                 item.addChild(child)
                 self.fill_item(child, val)
+        elif type(value) is list:
+            child = self.createComboBox(value)
+            item.treeWidget().setItemWidget(item, 1, child)
         elif type(value) is float or int:
             child = self.createSpinBox(value)
             item.treeWidget().setItemWidget(item, 1, child)
@@ -281,11 +286,23 @@ class MainWindow(QtWidgets.QMainWindow):
         root_item = widget.invisibleRootItem()
         self.fill_item(root_item, value)
         widget.resizeColumnToContents(0)
-        # Darken Top Level Rows
-        c = [100,100,100,100]   # Color
-        for index in range(widget.topLevelItemCount()):
-            for column in range(num_columns):
-                widget.topLevelItem(index).setBackground(column, QtGui.QColor(c[0], c[1], c[2], c[3]))
+        self.highlightRows(widget, [], [150,150,150,100])
+
+
+    def highlightRows(self, tree_widget, rows=[], color=[170,170,170,100]):
+        qt_color = QtGui.QColor(color[0], color[1], color[2], color[3])
+        num_columns = tree_widget.columnCount()
+        num_top_level_items = tree_widget.topLevelItemCount()
+        if len(rows)<1:
+            for index in range(num_top_level_items):
+                for column in range(num_columns):
+                    tree_widget.topLevelItem(index).setBackground(column, qt_color)
+
+
+    def createComboBox(self, list_of_values):
+        widgetComboBox = QtWidgets.QComboBox()
+        widgetComboBox.addItems(list_of_values)
+        return widgetComboBox
 
 
     def createSpinBox(self, value):
@@ -305,36 +322,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def setupPlotWidgets(self):
-        # self.graphicsView.setBackground(background=None)
-        self.graphicsView.setAntialiasing(True)
-        # self.graphicsView.showAxis('bottom', False)
-        self.graphicsView.enableAutoRange()
-        self.graphicsView.setTitle("Acceleration")
-        # self.graphicsView_2.setBackground(background=None)
-        self.graphicsView_2.setAntialiasing(True)
-        self.graphicsView_2.showAxis('bottom', False)
-        self.graphicsView_2.enableAutoRange()
-        self.graphicsView_2.setTitle("Angular Velocity")
-        # self.graphicsView_3.setBackground(background=None)
-        self.graphicsView_3.setAntialiasing(True)
-        self.graphicsView_3.showAxis('bottom', False)
-        self.graphicsView_3.enableAutoRange()
-        self.graphicsView_3.setTitle("Magnetic Field")
-        # self.graphicsView_4.setBackground(background=None)
-        self.graphicsView_4.setAntialiasing(True)
-        self.graphicsView_4.showAxis('bottom', False)
-        self.graphicsView_4.enableAutoRange()
-        self.graphicsView_4.setTitle("Reference Quaternions")
-        # self.graphicsView_5.setBackground(background=None)
-        self.graphicsView_5.setAntialiasing(True)
-        self.graphicsView_5.showAxis('bottom', False)
-        self.graphicsView_5.enableAutoRange()
-        self.graphicsView_5.setTitle("Computed Quaternions")
-        # self.graphicsView_6.setBackground(background=None)
-        self.graphicsView_6.setAntialiasing(True)
-        self.graphicsView_6.showAxis('bottom', True)
-        self.graphicsView_6.setTitle("Error")
-        # self.graphicsView_6.enableAutoRange()
+        graphics_widgets = [self.graphicsView, self.graphicsView_2,
+                            self.graphicsView_3, self.graphicsView_4,
+                            self.graphicsView_5, self.graphicsView_6]
+        graphics_titles = ["Acceleration", "Angular Velocity", "Magnetic Field",
+                           "Reference Quaternions", "Computed Quaternions", "Error"]
+        for index in range(len(graphics_widgets)):
+            # Setup each Graphic Widget
+            graphics_widgets[index].setAntialiasing(True)
+            graphics_widgets[index].showAxis('bottom', False)
+            graphics_widgets[index].enableAutoRange()
+            graphics_widgets[index].setTitle(graphics_titles[index])
+
         self.setupLookupGraph()
 
 
@@ -346,35 +345,42 @@ class MainWindow(QtWidgets.QMainWindow):
         self.graphicsView_7.showAxis('left', False)
         self.graphicsView_7.setTitle(None)
         self.graphicsView_7.setMouseEnabled(x=False, y=False)
-        # Add region
-        region = pg.LinearRegionItem()
-        region.setZValue(10)
-        # region.sigRegionChanged.connect(lambda: self.updateCoords(region))
-        # Add ROI to Plot Widget
-        self.graphicsView_7.addItem(region, ignoreBounds=True)
+        # # Add region
+        # self.addRegion(self.graphicsView_7)
 
 
-    def updateLookupGraph(self, data):
+    def updateLookupGraph(self, data, ROI=[]):
         # Get and Plot Shadow
         self.graphicsView_7.clear()
-        shadow = self.getDataShadow(data)
+        shadow = self.getDataShadow(data.gyr)
         x_axis = range(np.shape(shadow)[0])
         upper_line = pg.PlotDataItem(x_axis, shadow[:,0])
         lower_line = pg.PlotDataItem(x_axis, shadow[:,1])
         filled_plot = pg.FillBetweenItem(upper_line, lower_line, brush=(100,100,100,200))
         self.graphicsView_7.addItem(filled_plot)
+        # Add Region
+        if len(ROI)!=2:
+            ROI = [0, data.num_samples]
+        self.addRegion(self.graphicsView_7, data, ROI)
 
 
-    def updateCoords(self, region):
-        if len(self.all_data)>0:
+    def addRegion(self, widget, data=None, ROI=[]):
+        if data!=None:
+            region = pg.LinearRegionItem(brush=(90,90,90,70))
+            if len(ROI)==2:
+                region.setRegion(ROI)
+            # region.sigRegionChanged.connect(lambda: self.updateCoords(data, region))
+            region.sigRegionChangeFinished.connect(lambda: self.updateCoords(data, region))
+            widget.addItem(region, ignoreBounds=True)
+
+
+    def updateCoords(self, data, region):
+        if data.num_samples>0:
             minX, maxX = region.getRegion()
             if minX<0:
                 minX = 0
             ROI = [int(minX), int(maxX)]
-            self.plotData(self.graphicsView, self.all_data[ROI[0]:ROI[1],self.indices[0]])
-            self.plotData(self.graphicsView_2, self.all_data[ROI[0]:ROI[1],self.indices[1]])
-            self.plotData(self.graphicsView_3, self.all_data[ROI[0]:ROI[1],self.indices[2]])
-            self.plotData(self.graphicsView_4, self.all_data[ROI[0]:ROI[1],self.indices[3]])
+            self.updatePlots(data, ROI)
 
 
     def update_tableWidget(self, workspace):
@@ -442,11 +448,11 @@ class MainWindow(QtWidgets.QMainWindow):
         q = []
         if num_samples<1:
             return np.array(q)
+        q = [ np.array(rb.am2q(acc[0])) ]   # Initial Pose estimation with Accelerometer
+        # q = [ np.array([1., 0., 0., 0.]) ]
         if "Madgwick" in algo:
             freq = estimation_info[algo]['Frequency']
             beta = estimation_info[algo]['Beta']
-            q = [ np.array(rb.am2q(acc[0])) ]   # Initial Pose estimation with Accelerometer
-            # q = [ np.array([1., 0., 0., 0.]) ]
             if "MARG" in algo:
                 if len(mag)>0:
                     for i in range(1,num_samples):
@@ -462,7 +468,6 @@ class MainWindow(QtWidgets.QMainWindow):
             freq = estimation_info[algo]['Frequency']
             Kp = estimation_info[algo]['Kp']
             Ki = estimation_info[algo]['Ki']
-            q = [ np.array(rb.am2q(acc[0])) ]   # Initial Pose estimation with Accelerometer
             if "MARG" in algo:
                 for i in range(1,num_samples):
                     q.append( rb.Mahony.updateMARG(acc[i,:], gyr[i,:], mag[i,:], q[-1], freq, Kp, Ki) )
@@ -520,41 +525,44 @@ class MainWindow(QtWidgets.QMainWindow):
         plotWidget.addItem(txtItem)
 
 
-    def plotData(self, plotWidget, data, data2plot=[], clearPlot=True):
+    def plotData(self, plotWidget, data, ROI=[], clearPlot=True):
         """This function takes a numPy array of size M x 3, and plots its
         contents in the main PlotWidget using pyQtGraph.
         """
         lineStyle = "Line"
         current_settings = self.plot_settings.copy()
-        if np.shape(data)[0] < 1:
+        if len(data)<1:
             plotWidget.clear()
-            return 
-        if len(data2plot)<1:
-            data2plot = list(range(np.shape(data)[1]))
+            return
+        num_rows, num_columns = np.shape(data)
+        if num_columns < 1:
+            plotWidget.clear()
+            return
+        if len(ROI)!=2:
+            ROI = [0, num_rows]
         if clearPlot:
             plotWidget.clear()
         try:
-            used_colors = colors[:len(data2plot)]
-            if len(data2plot)==4:
-                used_colors = [colors[6]] + colors[:len(data2plot)]
-            for index in data2plot:
-                line_data = data[:,index]
-                self.plotDataLine(plotWidget, line_data, lineStyle, used_colors[index])
+            used_colors = colors[:num_columns]
+            if num_columns==4:
+                used_colors = [colors[6]] + colors[:num_columns]
+            for index in range(num_columns):
+                self.plotDataLine(plotWidget, data[ROI[0]:ROI[1],index], style="Line", color=used_colors[index])
             plotWidget.getViewBox().setAspectLocked(lock=False)
             plotWidget.autoRange()
             # Add Grid
             plotWidget.showGrid(x=current_settings["Grid-X"], y=current_settings["Grid-Y"])
         except:
-            QtGui.QMessageBox.warning(self, "Invalid File", "The selected file does not have valid data.")
+            print(self, "Invalid File", "The selected file does not have valid data.")
         self.plot_settings = current_settings.copy()
 
 
-    def updatePlots(self, data):
+    def updatePlots(self, data, ROI=[]):
         # Get and Plot Shadow
-        self.plotData(self.graphicsView, data.acc)
-        self.plotData(self.graphicsView_2, data.gyr)
-        self.plotData(self.graphicsView_3, data.mag)
-        self.plotData(self.graphicsView_4, data.qts)
+        self.plotData(self.graphicsView, data.acc, ROI)
+        self.plotData(self.graphicsView_2, data.gyr, ROI)
+        self.plotData(self.graphicsView_3, data.mag, ROI)
+        self.plotData(self.graphicsView_4, data.qts, ROI)
 
 
 class Data:
@@ -563,13 +571,12 @@ class Data:
         self.data, self.headers = self.getData(self.file)
         self.num_samples = len(self.data)
         self.header_info = self.idLabelGroups(self.headers)
-        self.acc, self.gyr, self.mag, self.qts, self.pos = [], [], [], [], []
+        self.acc, self.gyr, self.mag, self.qts, self.pos, self.timestamps = [], [], [], [], [], []
         self.allotData(self.data, self.header_info)
-        # self.frequency = 100.0
-        # if "timestamp_imu" in self.headers:
-        #     timer_idx = self.headers.index("timestamp_imu")
-        #     self.frequency = self.idFrequency(self.data, timer_index=timer_idx, units='s')
-        #     print(self.frequency)
+        # Identify and append frequencies
+        self.frequencies = []
+        self.frequencies.append(self.idFrequency(self.timestamps, timer_index=0, units='ns'))
+        self.frequencies.append(self.idFrequency(self.timestamps, timer_index=1, units='ns'))
 
     def getData(self, fileName, data_type='float'):
         """getData reads the data stored in a CSV file, returns a numPy array of
@@ -670,15 +677,17 @@ class Data:
             labels_list = list(header_info.keys())
             for label in labels_list:
                 if label == "Accelerometers":
-                    self.acc = data[:,header_info["Accelerometers"]["indices"]]
+                    self.acc = data[:,header_info[label]["indices"]]
                 if label == "Gyroscopes":
-                    self.gyr = data[:,header_info["Gyroscopes"]["indices"]]
+                    self.gyr = data[:,header_info[label]["indices"]]
                 if label == "Magnetometers":
-                    self.mag = data[:,header_info["Magnetometers"]["indices"]]
+                    self.mag = data[:,header_info[label]["indices"]]
                 if label == "Quaternions":
-                    self.qts = data[:,header_info["Quaternions"]["indices"]]
+                    self.qts = data[:,header_info[label]["indices"]]
                 if label == "Position":
-                    self.pos = data[:,header_info["Position"]["indices"]]
+                    self.pos = data[:,header_info[label]["indices"]]
+                if label == "Timestamps":
+                    self.timestamps = data[:,header_info[label]["indices"]]
         except:
             print("[WARN] File '{}' has no valid data to allocate.".format(self.file))
 
@@ -687,7 +696,11 @@ class Data:
         diffs = np.diff(timestamps)
         mean = np.mean(diffs)
         if units=='ms':
-            mean /= 1000.0
+            mean *= 1e-3
+        if units=='us':
+            mean *= 1e-6
+        if units=='ns':
+            mean *= 1e-9
         return 1.0 / mean
 
 

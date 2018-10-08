@@ -15,5 +15,12 @@
         "Gyroscopes":["gx", "gy", "gz"],
         "Position":["px", "py", "pz"],
         "Quaternions":["qw", "qx", "qy", "qz"]
+    },
+    "tum-vi":{
+        "Timestamps":["timestamp_imu [ns]", "timestamp_truth [ns]"],
+        "Accelerometers":["a_RS_S_x [m s^-2]", "a_RS_S_y [m s^-2]", "a_RS_S_z [m s^-2]"],
+        "Gyroscopes":["w_RS_S_x [rad s^-1]", "w_RS_S_y [rad s^-1]", "w_RS_S_z [rad s^-1]"],
+        "Position":["p_RS_R_x [m]", "p_RS_R_y [m]", "p_RS_R_z [m]"],
+        "Quaternions":["q_RS_w []", "q_RS_x []", "q_RS_y []", "q_RS_z []"]
     }
 }

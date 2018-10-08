@@ -17,5 +17,8 @@
         "Savitzky-Golay":{"window_size":5, "polynomial_order":3},
         "Uniform":{"window_size":3},
         "Kalman":{"s_Q":0.1, "s_R":0.1}
+    },
+    "3D Representation":{
+        "Grid":{"Axis":["X", "Y", "Z"], "Offset":10}
     }
 }

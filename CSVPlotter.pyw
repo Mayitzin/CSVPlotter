@@ -31,6 +31,33 @@ def json2dict(fileName):
         read_lines = f.readlines()
     return json.loads( ''.join(read_lines) )
 
+def quickCountLines(fileName):
+    return sum(1 for line in open(fileName))
+
+def quickCountColumns(fileName, separator=';'):
+    with open(fileName, 'r') as f:
+        read_line = f.readline()
+    return len( read_line.strip().split(separator) )
+
+def isfloat(value):
+    try:
+        float(value)
+        return True
+    except ValueError:
+        return False
+
+def countHeaders(data_lines=[]):
+    row_count = 0
+    for line in data_lines:
+        elements_array = []
+        for element in line.strip().split(';'):
+            elements_array.append(isfloat(element))
+        if not all(elements_array):
+            row_count += 1
+        else:
+            break
+    return row_count
+
 all_labels = json2dict('labels.dat')
 general_options = json2dict('data_options.dat')
 
@@ -163,16 +190,16 @@ class MainWindow(QtWidgets.QMainWindow):
                     child_value = tree.itemWidget(var.child(child_idx),1).value()
                     options[child_name] = child_value
         return options
-
-
-    def quickCountLines(self, fileName):
-        return sum(1 for line in open(fileName))
-
-
-    def quickCountColumns(self, fileName, separator=';'):
-        with open(fileName, 'r') as f:
-            read_line = f.readline()
-        return len( read_line.strip().split(separator) )
+    #
+    #
+    # def quickCountLines(self, fileName):
+    #     return sum(1 for line in open(fileName))
+    #
+    #
+    # def quickCountColumns(self, fileName, separator=';'):
+    #     with open(fileName, 'r') as f:
+    #         read_line = f.readline()
+    #     return len( read_line.strip().split(separator) )
 
 
     def setupWidgets(self):
@@ -391,9 +418,9 @@ class MainWindow(QtWidgets.QMainWindow):
             file_name = found_files[row]
             item_file_name = QtGui.QTableWidgetItem( file_name )
             item_file_name.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
-            item_num_lines = QtGui.QTableWidgetItem( str(self.quickCountLines(file_name)) )
+            item_num_lines = QtGui.QTableWidgetItem( str(quickCountLines(file_name)) )
             item_num_lines.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            item_num_cols = QtGui.QTableWidgetItem( str(self.quickCountColumns(file_name)) )
+            item_num_cols = QtGui.QTableWidgetItem( str(quickCountColumns(file_name)) )
             item_num_cols.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             date_string = datetime.datetime.fromtimestamp(os.path.getctime(file_name)).strftime('%d.%m.%y %H:%M')
             item_date = QtGui.QTableWidgetItem( date_string )
@@ -439,7 +466,6 @@ class MainWindow(QtWidgets.QMainWindow):
         """estimatePose computes the Orientation of the frame, given the IMU data
         """
         freq, beta = 100.0, 0.01
-        Kp, Ki = 0.1, 0.5
         acc = data.acc
         gyr = data.gyr
         mag = data.mag
@@ -466,14 +492,14 @@ class MainWindow(QtWidgets.QMainWindow):
                     q.append( rb.Madgwick.updateIMU(acc[i,:], gyr[i,:], q[-1], beta, freq) )
         if "Mahony" in algo:
             freq = estimation_info[algo]['Frequency']
-            Kp = estimation_info[algo]['Kp']
-            Ki = estimation_info[algo]['Ki']
+            kp = estimation_info[algo]['Kp']
+            ki = estimation_info[algo]['Ki']
             if "MARG" in algo:
                 for i in range(1,num_samples):
-                    q.append( rb.Mahony.updateMARG(acc[i,:], gyr[i,:], mag[i,:], q[-1], freq, Kp, Ki) )
+                    q.append( rb.Mahony.updateMARG(acc[i,:], gyr[i,:], mag[i,:], q[-1], freq, kp, ki) )
             if "IMU" in algo:
                 for i in range(1,num_samples):
-                    q.append( rb.Mahony.updateIMU(acc[i,:], gyr[i,:], q[-1], freq, Kp, Ki) )
+                    q.append( rb.Mahony.updateIMU(acc[i,:], gyr[i,:], q[-1], freq, kp, ki) )
         if algo=="Gravity":
             for i in range(num_samples):
                 q.append( rb.am2q(acc[i,:]) )
@@ -571,12 +597,16 @@ class Data:
         self.data, self.headers = self.getData(self.file)
         self.num_samples = len(self.data)
         self.header_info = self.idLabelGroups(self.headers)
-        self.acc, self.gyr, self.mag, self.qts, self.pos, self.timestamps = [], [], [], [], [], []
+        self.acc, self.gyr, self.mag, self.qts, self.pos = [], [], [], [], []
+        self.timestamps, self.frequencies = [], []
         self.allotData(self.data, self.header_info)
         # Identify and append frequencies
-        self.frequencies = []
-        self.frequencies.append(self.idFrequency(self.timestamps, timer_index=0, units='ns'))
-        self.frequencies.append(self.idFrequency(self.timestamps, timer_index=1, units='ns'))
+        if len(self.timestamps)>0:
+            num_timestamps = np.shape(self.timestamps)[1]
+            for idx in range(num_timestamps):
+                self.frequencies.append(self.idFrequency(self.timestamps, timer_index=idx, units='ns'))
+            # self.frequencies.append(self.idFrequency(self.timestamps, timer_index=0, units='ns'))
+            # self.frequencies.append(self.idFrequency(self.timestamps, timer_index=1, units='ns'))
 
     def getData(self, fileName, data_type='float'):
         """getData reads the data stored in a CSV file, returns a numPy array of
@@ -589,15 +619,14 @@ class Data:
         data        is an array of the size M-by-N, where M is the number of
                     samples and N is the number of observed elements (headers or
                     columns.)
-        headers     is a list of strings with the headers in the file. It is
-                    also of size N.
+        headers     is a list of N strings with the headers in the file.
         """
         data, headers = [], []
         try:
             with open(fileName, 'r') as f:
                 read_data = f.readlines()
             # Read and store Headers in a list of strings
-            header_rows = self.countHeaders(read_data)
+            header_rows = countHeaders(read_data)
             if header_rows > 1:
                 headers = self.mergeHeaders(read_data[:header_rows])
             else:
@@ -608,18 +637,6 @@ class Data:
         except:
             data = np.array([], dtype=data_type)
         return data, headers
-
-    def countHeaders(self, data_lines=[]):
-        row_count = 0
-        for line in data_lines:
-            elements_array = []
-            for element in line.strip().split(';'):
-                elements_array.append(self.isfloat(element))
-            if not all(elements_array):
-                row_count += 1
-            else:
-                break
-        return row_count
 
     def mergeHeaders(self, header_lines):
         all_headers = []
@@ -637,13 +654,6 @@ class Data:
                 new_headers.append(new_label)
         return new_headers
 
-    def isfloat(self, value):
-        try:
-            float(value)
-            return True
-        except ValueError:
-            return False
-
     def idLabelGroups(self, found_headers, single_group=True):
         labels2use = []
         all_group_indices = []
@@ -652,6 +662,7 @@ class Data:
             all_group_labels = []
             group_indices = []
             headers_keys = list(all_labels[dset_lbl].keys())
+            # print("headers_keys:", headers_keys)
             for i in range(len(headers_keys)):
                 header_group = headers_keys[i]
                 data_info[header_group] = {}
@@ -663,6 +674,7 @@ class Data:
             if all(x in found_headers for x in all_group_labels):
                 labels2use.append(dset_lbl)
                 all_group_indices.append(group_indices)
+                break
         return data_info
 
     def matchIndices(self, all_headers, requested_headers):
@@ -687,6 +699,7 @@ class Data:
                 if label == "Position":
                     self.pos = data[:,header_info[label]["indices"]]
                 if label == "Timestamps":
+                    print("Updating the timestamps")
                     self.timestamps = data[:,header_info[label]["indices"]]
         except:
             print("[WARN] File '{}' has no valid data to allocate.".format(self.file))

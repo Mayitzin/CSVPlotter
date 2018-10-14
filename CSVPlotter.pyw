@@ -27,6 +27,14 @@ colors = [(255,0,0,255),(0,255,0,255),(60,60,255,255),          # Red, Green, Bl
           (215,215,0,255),(150,150,0,255),(125,125,125,255)  ]  # Yellow, Dark Yellow, Gray
 
 def json2dict(fileName):
+    """reads a json file and stores its contents orderly in a dictionary.
+    
+    Args:
+        fileName (TYPE): the path and name of the file containing a json string.
+    
+    Returns:
+        dictionary with the formatted contents of the json file.
+    """
     with open(fileName, 'r') as f:
         read_lines = f.readlines()
     return json.loads( ''.join(read_lines) )
@@ -455,6 +463,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def getDataShadow(self, data):
+        """Summary
+        
+        Args:
+            data (TYPE): Description
+        
+        Returns:
+            TYPE: Description
+        """
         num_rows = np.shape(data)[0]
         shadow = np.linalg.norm(data, axis=1).reshape((num_rows,1))
         shadow = np.abs(shadow - np.mean(shadow[:10])) # Remove bias (mean of first lines)

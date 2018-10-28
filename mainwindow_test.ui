@@ -31,7 +31,7 @@
          </property>
         </column>
        </widget>
-       <widget class="PlotWidget" name="graphicsView"/>
+       <widget class="GraphicsLayoutWidget" name="graphicsView"/>
       </widget>
       <widget class="QWidget" name="verticalLayoutWidget">
        <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -81,7 +81,7 @@
      <x>0</x>
      <y>0</y>
      <width>1048</width>
-     <height>22</height>
+     <height>21</height>
     </rect>
    </property>
   </widget>
@@ -89,7 +89,7 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>PlotWidget</class>
+   <class>GraphicsLayoutWidget</class>
    <extends>QGraphicsView</extends>
    <header>pyqtgraph</header>
   </customwidget>

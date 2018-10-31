@@ -22,6 +22,8 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
         uic.loadUi('mainwindow_test.ui', self)
         self.splitter.setStretchFactor(1, 5)
+        self.update_tableWidget(self.tableWidget, paths)
+        self.tableWidget.setDragEnabled(True)
         max_elems = 9
         self.all_data = random_samples(max_elems, 10)
         gv = self.graphicsView
@@ -47,10 +49,8 @@ class MainWindow(QtWidgets.QMainWindow):
             plot_item.addItem(new_plot_data_item)
         # print("Items:", gv_layout.items)
         # print("Rows:", gv_layout.rows)
-        self.tableWidget.setDragEnabled(True)
         # self.tableWidget.dragLeaveEvent = dragLeaveEvent
         # self.tableWidget.viewport().setAcceptDrops(True)
-        self.update_tableWidget(self.tableWidget, paths)
 
 
     def plot_data(self, plotWidget, data):
@@ -82,10 +82,17 @@ class MainWindow(QtWidgets.QMainWindow):
         table_widget.resizeColumnToContents(0)
 
 def dragEnterEvent(ev):
+    """
+    See Also
+    --------
+    - https://wiki.python.org/moin/PyQt/Handling%20Qt%27s%20internal%20item%20MIME%20type
+
+    """
     event_mimeData = ev.mimeData()
-    # print(dir(event_mimeData))
-    print(event_mimeData.formats())
-    ev.accept()
+    if event_mimeData.hasFormat('application/x-qabstractitemmodeldatalist'):
+        ev.accept()
+    else:
+        ev.ignore()
     # if ev.mimeData().hasFormat('text/plain'):
     #     ev.accept()
     # else:
@@ -95,8 +102,45 @@ def dragLeaveEvent(ev):
     print(ev)
 
 def dropEvent(event):
-    # print(event.mimeData().text())
     print("Got drop!")
+    event_mimeData = event.mimeData()
+    bytearray = event_mimeData.data('application/x-qabstractitemmodeldatalist')
+    # print(type(bytearray))
+    qbyte_data = QtCore.QByteArray(bytearray)
+    qvar_data = QtCore.QVariant(qbyte_data)
+    # print(qbyte_data.data().decode('windows-1252'))
+    # print(qvar_data.canConvert())
+    # print(type(qbyte_data))
+    decoded_data = decode_data(bytearray)
+    print("decoded data:", decoded_data)
+    if type(decoded_data[0]) == dict:
+        dcd_data_keys = list(decoded_data[0].keys())
+        for k in dcd_data_keys:
+            print(k, ":", decoded_data[0][k].type())
+    # text = data_items[0][QtCore.Qt.DisplayRole].toString()
+    # print(dir(data_items[0]))
+    # for item in data_items:
+    #     keys = list(item.keys())
+    #     # print(keys[0], ":", dir(item[keys[0]]))
+    #     attributes = dir(item[keys[0]])
+    #     # print(item[keys[0]].__format__)
+    #     print(item[keys[0]].type(), ":", item[keys[0]].typeName())
+
+def decode_data(bytearray):
+    data = []
+    item = {}
+    ds = QtCore.QDataStream(bytearray)
+    while not ds.atEnd():
+        row = ds.readInt32()
+        column = ds.readInt32()
+        map_items = ds.readInt32()
+        for i in range(map_items):
+            key = ds.readInt32()
+            value = QtCore.QVariant()
+            ds >> value
+            item[QtCore.Qt.ItemDataRole(key)] = value
+        data.append(item)
+    return data
 
 def quickCountLines(fileName):
     return sum(1 for line in open(fileName))

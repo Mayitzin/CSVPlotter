@@ -51,16 +51,30 @@
            </spacer>
           </item>
           <item>
-           <widget class="QPushButton" name="pushButton_2">
+           <widget class="QPushButton" name="pushButton">
             <property name="text">
-             <string>Vertical</string>
+             <string>H+</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="pushButton">
+           <widget class="QPushButton" name="pushButton_2">
             <property name="text">
-             <string>Horizontal</string>
+             <string>V+</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButton_3">
+            <property name="text">
+             <string>H-</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButton_4">
+            <property name="text">
+             <string>V-</string>
             </property>
            </widget>
           </item>

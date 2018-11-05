@@ -13,6 +13,7 @@ import os
 import datetime
 import numpy as np
 from PyQt5 import QtGui, uic, QtWidgets, QtCore
+from PyQt5.QtCore import pyqtSlot
 import pyqtgraph as pg
 
 paths = ["./data/"]
@@ -27,6 +28,7 @@ class MainWindow(QtWidgets.QMainWindow):
         max_elems = 9
         self.all_data = random_samples(max_elems, 10)
         gv = self.graphicsView
+        print(type(gv))
         gv_layout = gv.ci
         gv.dragEnterEvent = dragEnterEvent
         gv.addPlot(row=0, col=0, title="Data 1")
@@ -42,15 +44,107 @@ class MainWindow(QtWidgets.QMainWindow):
         # print("There are {} elements in the {} x {} Plot Widget array".format(len(all_plot_items), len(gv_layout.rows), gv_layout.currentCol))
         for plot_item in all_plot_items:
             plot_item.setAcceptDrops(True)
-            plot_item.dropEvent = dropEvent
+            # plot_item.dropEvent = dropEvent
+            plot_item.dropEvent = self.dropEvent
             # plot_item_title = plot_item.titleLabel.text
             # print("  {} at position {}".format(plot_item_title, all_plot_items[plot_item]))
             new_plot_data_item = pg.PlotDataItem(np.random.random(10))
             plot_item.addItem(new_plot_data_item)
         # print("Items:", gv_layout.items)
         # print("Rows:", gv_layout.rows)
-        # self.tableWidget.dragLeaveEvent = dragLeaveEvent
         # self.tableWidget.viewport().setAcceptDrops(True)
+
+    def print_graphics_dims(self, plot_widget):
+        gv_layout = plot_widget.ci
+        num_rows = gv_layout.currentRow + 1
+        num_cols = gv_layout.currentCol
+        print(" {} x {}".format(num_rows, num_cols))
+
+    @pyqtSlot(bool)
+    def on_pushButton_clicked(self):
+        """
+        Add Column in Graphics View
+        """
+        self.add_subplot_array(self.graphicsView, axis=1)
+
+    @pyqtSlot(bool)
+    def on_pushButton_2_clicked(self):
+        """
+        Add Row in Graphics View
+        """
+        self.add_subplot_array(self.graphicsView, axis=0)
+
+    def add_subplot_array(self, plot_widget, axis):
+        gv_layout = plot_widget.ci
+        num_rows = gv_layout.currentRow + 1
+        num_cols = gv_layout.currentCol
+        if axis == 0:
+            gv_layout.nextRow()
+            for col in range(num_cols):
+                plot_widget.addPlot(row=num_rows, col=col, title="Extra Row")
+        else:
+            for row in range(num_rows):
+                plot_widget.addPlot(row=row, col=num_cols, title="Extra Column")
+            gv_layout.currentCol = num_cols + 1
+        # self.print_graphics_dims(plot_widget)
+        all_plot_items = gv_layout.items
+        for plot_item in all_plot_items:
+            plot_item.setAcceptDrops(True)
+            plot_item.dropEvent = self.dropEvent
+
+    # def remove_subplot_row(self, plot_widget):
+
+    def remove_subplot_array(self, plot_widget):
+        gv_layout = plot_widget.ci
+        gv_layout = QtGui.GraphicsLayoutWidget()
+        # new_layout = QtGui.QGraphicsGridLayout()
+        # gv_layout.setLayout(new_layout)
+        # gv_layout.items = {}
+        # gv_layout.update()
+        # gv_layout = plot_widget.ci
+        # num_rows = gv_layout.currentRow + 1
+        # num_cols = gv_layout.currentCol
+        # # items_to_remove = []
+        # for item in range(num_rows):
+        #     plot_widget.removeItem(plot_widget.getItem(item, num_cols-1))
+        #     # items_to_remove.append(plot_widget.getItem(item, num_cols-1))
+        # # print("Items to remove:", items_to_remove)
+        self.print_graphics_dims(plot_widget)
+
+    @pyqtSlot(bool)
+    def on_pushButton_3_clicked(self):
+        """
+        Remove Column from Graphics View
+        """
+        self.remove_subplot_array(self.graphicsView)
+
+    @pyqtSlot(bool)
+    def on_pushButton_4_clicked(self):
+        """
+        Remove Row from Graphics View
+        """
+        print("Push button 4 was clicked.")
+
+    def dropEvent(self, event):
+        event_mimeData = event.mimeData()
+        # Handle event data
+        byte_array = event_mimeData.data('application/x-qabstractitemmodeldatalist')
+        dcd_data = decode_data(byte_array)[0]
+        dragged_items = []
+        if type(dcd_data) == dict:
+            for k in list(dcd_data.keys()):
+                if type(dcd_data[k].value()) == str:
+                    dragged_items.append(dcd_data[k].value())
+        # Handle drop event position in Graphics View
+        ev_pos = event.scenePos()
+        all_plot_items = self.graphicsView.ci.items
+        for item in all_plot_items:
+            coords = item.mapRectToParent(item.rect()).getCoords()
+            in_subplot = (coords[0] <= ev_pos.x() <= coords[2]) and (coords[1] <= ev_pos.y() <= coords[3])
+            if in_subplot:
+                item_cells = all_plot_items[item]
+                item_title = item.titleLabel.text
+                print("Dropped {} in {} {}.".format(dragged_items[-1], item_title, item_cells[0]))
 
 
     def plot_data(self, plotWidget, data):
@@ -81,50 +175,20 @@ class MainWindow(QtWidgets.QMainWindow):
             table_widget.setItem(row, 3, item_date)
         table_widget.resizeColumnToContents(0)
 
-def dragEnterEvent(ev):
+
+def dragEnterEvent(event):
     """
     See Also
     --------
     - https://wiki.python.org/moin/PyQt/Handling%20Qt%27s%20internal%20item%20MIME%20type
 
     """
-    event_mimeData = ev.mimeData()
-    if event_mimeData.hasFormat('application/x-qabstractitemmodeldatalist'):
-        ev.accept()
-    else:
-        ev.ignore()
-    # if ev.mimeData().hasFormat('text/plain'):
-    #     ev.accept()
-    # else:
-    #     ev.ignore()
-
-def dragLeaveEvent(ev):
-    print(ev)
-
-def dropEvent(event):
-    print("Got drop!")
     event_mimeData = event.mimeData()
-    bytearray = event_mimeData.data('application/x-qabstractitemmodeldatalist')
-    # print(type(bytearray))
-    qbyte_data = QtCore.QByteArray(bytearray)
-    qvar_data = QtCore.QVariant(qbyte_data)
-    # print(qbyte_data.data().decode('windows-1252'))
-    # print(qvar_data.canConvert())
-    # print(type(qbyte_data))
-    decoded_data = decode_data(bytearray)
-    print("decoded data:", decoded_data)
-    if type(decoded_data[0]) == dict:
-        dcd_data_keys = list(decoded_data[0].keys())
-        for k in dcd_data_keys:
-            print(k, ":", decoded_data[0][k].type())
-    # text = data_items[0][QtCore.Qt.DisplayRole].toString()
-    # print(dir(data_items[0]))
-    # for item in data_items:
-    #     keys = list(item.keys())
-    #     # print(keys[0], ":", dir(item[keys[0]]))
-    #     attributes = dir(item[keys[0]])
-    #     # print(item[keys[0]].__format__)
-    #     print(item[keys[0]].type(), ":", item[keys[0]].typeName())
+    if event_mimeData.hasFormat('application/x-qabstractitemmodeldatalist'):
+        event.accept()
+    else:
+        event.ignore()
+
 
 def decode_data(bytearray):
     data = []

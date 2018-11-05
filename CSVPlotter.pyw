@@ -20,11 +20,11 @@ import rigidbody as rb
 base_path = "./data"
 workspace = [base_path]
 
-plotting_options = ["Grid-X","Label-X","Values-X","Grid-Y","Label-Y","Values-Y","ShowTitle"]
+plotting_options = ["Grid-X", "Label-X", "Values-X", "Grid-Y", "Label-Y", "Values-Y", "ShowTitle"]
 # Set default List of Colors
-colors = [(255,0,0,255),(0,255,0,255),(60,60,255,255),          # Red, Green, Blue
-          (120,0,0,255),(0,100,0,255),(0,0,150,255),            # Dark Red, Dark Green, Dark Blue
-          (215,215,0,255),(150,150,0,255),(125,125,125,255)  ]  # Yellow, Dark Yellow, Gray
+colors = [(255, 0, 0, 255), (0, 255, 0, 255), (60, 60, 255, 255),          # Red, Green, Blue
+          (120, 0, 0, 255), (0, 100, 0, 255), (0, 0, 150, 255),            # Dark Red, Dark Green, Dark Blue
+          (215, 215, 0, 255), (150, 150, 0, 255), (125, 125, 125, 255) ]   # Yellow, Dark Yellow, Gray
 
 def json2dict(fileName):
     """reads a json file and stores its contents orderly in a dictionary.
@@ -254,7 +254,7 @@ class MainWindow(QtWidgets.QMainWindow):
         num_frames  is the number of frames to be plot. Default is 5.
         ax_len      is the length of the axes in each frame. Default is 0.1.
         """
-        colors = [(1.0,0.0,0.0,1.0), (0.0,1.0,0.0,1.0), (0.0,0.0,1.0,1.0)]
+        colors = [(1.0, 0.0, 0.0, 1.0), (0.0, 1.0, 0.0, 1.0), (0.0, 0.0, 1.0, 1.0)]
         num_samples = len(quaternions)
         if num_samples<1:
             quaternions = [[1., 0., 0., 0.]]

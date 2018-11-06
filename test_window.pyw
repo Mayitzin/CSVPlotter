@@ -28,7 +28,7 @@ class MainWindow(QtWidgets.QMainWindow):
         max_elems = 9
         self.all_data = random_samples(max_elems, 10)
         gv = self.graphicsView
-        print(type(gv))
+        # print(type(gv))
         gv_layout = gv.ci
         gv.dragEnterEvent = dragEnterEvent
         gv.addPlot(row=0, col=0, title="Data 1")
@@ -54,11 +54,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # print("Rows:", gv_layout.rows)
         # self.tableWidget.viewport().setAcceptDrops(True)
 
-    def print_graphics_dims(self, plot_widget):
-        gv_layout = plot_widget.ci
-        num_rows = gv_layout.currentRow + 1
-        num_cols = gv_layout.currentCol
-        print(" {} x {}".format(num_rows, num_cols))
+    def widget_layout_dims(self, widget_layout):
+        # gv_layout = plot_widget.ci
+        num_rows = widget_layout.currentRow + 1
+        num_cols = widget_layout.currentCol
+        # print(" {} x {}".format(num_rows, num_cols))
+        return (num_rows, num_cols)
 
     @pyqtSlot(bool)
     def on_pushButton_clicked(self):
@@ -86,37 +87,45 @@ class MainWindow(QtWidgets.QMainWindow):
             for row in range(num_rows):
                 plot_widget.addPlot(row=row, col=num_cols, title="Extra Column")
             gv_layout.currentCol = num_cols + 1
-        # self.print_graphics_dims(plot_widget)
         all_plot_items = gv_layout.items
         for plot_item in all_plot_items:
             plot_item.setAcceptDrops(True)
             plot_item.dropEvent = self.dropEvent
 
-    # def remove_subplot_row(self, plot_widget):
-
-    def remove_subplot_array(self, plot_widget):
-        gv_layout = plot_widget.ci
-        gv_layout = QtGui.GraphicsLayoutWidget()
-        # new_layout = QtGui.QGraphicsGridLayout()
-        # gv_layout.setLayout(new_layout)
-        # gv_layout.items = {}
-        # gv_layout.update()
-        # gv_layout = plot_widget.ci
-        # num_rows = gv_layout.currentRow + 1
-        # num_cols = gv_layout.currentCol
-        # # items_to_remove = []
-        # for item in range(num_rows):
-        #     plot_widget.removeItem(plot_widget.getItem(item, num_cols-1))
-        #     # items_to_remove.append(plot_widget.getItem(item, num_cols-1))
-        # # print("Items to remove:", items_to_remove)
-        self.print_graphics_dims(plot_widget)
+    def copy_plot_widget(self, plot_widget, scope=None):
+        plot_widget_layout = plot_widget.ci
+        print(type(plot_widget_layout))
+        num_rows, num_cols = self.widget_layout_dims(plot_widget_layout)
+        print("{} x {}".format(num_rows, num_cols))
+        # Show elements
+        # plot_items_list = list(plot_widget_layout.items.keys())
+        # for item in plot_items_list:
+        #     print(item, plot_widget_layout.items[item][0])
+        # for item in plot_rows_list:
+        #     print(item, plot_widget_layout.items[item][0])
+        # New Graphics Layout
+        new_gv = pg.widgets.GraphicsLayoutWidget.GraphicsLayoutWidget()
+        # if scope is None:
+        #     scope = [num_rows, num_cols]
+        # for row in range(scope[0]):
+        #     new_gv.addItem
+        plot_rows_list = list(plot_widget_layout.rows.keys())
+        for row in plot_rows_list:
+            print("Row: {}".format(row))
+            for col in range(num_cols):
+                print("   Column: {}".format(plot_widget_layout.rows[row]))
+        return new_gv
 
     @pyqtSlot(bool)
     def on_pushButton_3_clicked(self):
         """
         Remove Column from Graphics View
         """
-        self.remove_subplot_array(self.graphicsView)
+        new_graphics_view = self.copy_plot_widget(self.graphicsView)
+        new_gv_layout = new_graphics_view.ci
+        print(type(new_gv_layout))
+        num_rows, num_cols = self.widget_layout_dims(new_gv_layout)
+        print("{} x {}".format(num_rows, num_cols))
 
     @pyqtSlot(bool)
     def on_pushButton_4_clicked(self):

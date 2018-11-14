@@ -93,27 +93,45 @@ class MainWindow(QtWidgets.QMainWindow):
             plot_item.dropEvent = self.dropEvent
 
     def copy_plot_widget(self, plot_widget, scope=None):
+        print("\n----- Copying plot Widget")
         plot_widget_layout = plot_widget.ci
         print(type(plot_widget_layout))
         num_rows, num_cols = self.widget_layout_dims(plot_widget_layout)
         print("{} x {}".format(num_rows, num_cols))
-        # Show elements
-        # plot_items_list = list(plot_widget_layout.items.keys())
-        # for item in plot_items_list:
-        #     print(item, plot_widget_layout.items[item][0])
-        # for item in plot_rows_list:
-        #     print(item, plot_widget_layout.items[item][0])
         # New Graphics Layout
         new_gv = pg.widgets.GraphicsLayoutWidget.GraphicsLayoutWidget()
-        # if scope is None:
-        #     scope = [num_rows, num_cols]
-        # for row in range(scope[0]):
-        #     new_gv.addItem
         plot_rows_list = list(plot_widget_layout.rows.keys())
+        # Add plots to new Graphics Layout
         for row in plot_rows_list:
-            print("Row: {}".format(row))
-            for col in range(num_cols):
-                print("   Column: {}".format(plot_widget_layout.rows[row]))
+            for col in list(range(num_cols)):
+                # new_plot_item = pg.PlotItem(title="Copied plot")
+                # new_plot_item = plot_widget_layout.getItem(row, col)
+                # print(new_plot_item, row, col)
+                # new_gv.ci.addItem(new_plot_item, row=row, col=col)
+                new_gv.addPlot(row=row, col=col, title="Copied plot")
+            if not(row == plot_rows_list[-1]):
+                new_gv.ci.nextRow()
+        # Copy plot elements
+        # all_new_items = new_gv.ci.items
+        all_old_items = plot_widget.ci.items
+        print("New items:")
+        for item in new_gv.ci.items:
+            current_row = new_gv.ci.items[item][0][0]
+            current_col = new_gv.ci.items[item][0][1]
+            print(item, ":", new_gv.ci.items[item])
+            old_item = new_gv.ci.getItem(current_row, current_col)
+            # new_gv.ci.items[old_item] = [(current_row, current_col)]
+            item = {old_item:[(current_row, current_col)]}.copy()
+            # del new_gv.ci.items[item]
+        print("Old items:")
+        for item in all_old_items:
+            print(item, ":", all_old_items[item])
+        print("New items AGAIN:")
+        for item in new_gv.ci.items:
+            print(item, ":", new_gv.ci.items[item])
+            # print(item)
+        # print("New items:", new_gv.ci.items)
+        print("------ Finishing Copy\n")
         return new_gv
 
     @pyqtSlot(bool)
@@ -121,11 +139,13 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         Remove Column from Graphics View
         """
+        print("== Remove Column ==")
         new_graphics_view = self.copy_plot_widget(self.graphicsView)
         new_gv_layout = new_graphics_view.ci
         print(type(new_gv_layout))
         num_rows, num_cols = self.widget_layout_dims(new_gv_layout)
         print("{} x {}".format(num_rows, num_cols))
+        self.graphicsView.setCentralWidget(new_graphics_view.ci)
 
     @pyqtSlot(bool)
     def on_pushButton_4_clicked(self):

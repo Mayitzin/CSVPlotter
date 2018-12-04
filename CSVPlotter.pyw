@@ -95,6 +95,26 @@ def decode_data(bytearray):
         data.append(item)
     return data
 
+def dropEvent(event):
+    event_mimeData = event.mimeData()
+    # Handle event data
+    byte_array = event_mimeData.data('application/x-qabstractitemmodeldatalist')
+    dcd_data = decode_data(byte_array)[0]
+    dragged_items = []
+    if type(dcd_data) == dict:
+        for k in list(dcd_data.keys()):
+            if type(dcd_data[k].value()) == str:
+                dragged_items.append(dcd_data[k].value())
+    # Handle drop event position in Graphics View
+    ev_pos = event.scenePos()
+    # all_plot_items = self.graphicsView.ci.items
+    # list_of_items = dir(event)
+    # for item in list_of_items:
+    #     print(item)
+    print(event.widget())
+    # item_title = self.titleLabel.text
+    # print("Dropped {} in {} .".format(dragged_items[-1], item_title))
+
 all_labels = json2dict('labels.dat')
 general_options = json2dict('data_options.dat')
 
@@ -113,11 +133,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tableWidget.setDragEnabled(True)
         gv = self.graphicsView
         gv.dragEnterEvent = dragEnterEvent
-        gv_layout = gv.ci
-        plot_items = gv_layout.items
-        for item in plot_items:
-            item.setAcceptDrops(True)
-            item.dropEvent = dropEvent
+        gv_layout = gv.centralWidget
+        gv_layout.setAcceptDrops(True)
+        gv_layout.dropEvent = dropEvent
 
     """ ========================== SIGNALED FUNCTIONS ==========================
     """
@@ -149,7 +167,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.updateLookupGraph(data)
         self.statusBar.showMessage("Ready")
 
-
     @pyqtSlot(QtGui.QKeyEvent)
     def on_graphicsView_keyPressEvent(self):
         print("graphicsView was clicked")
@@ -160,28 +177,6 @@ class MainWindow(QtWidgets.QMainWindow):
             tests = self.setTests()
             mse_errors = self.runAllTests(tests, self.data)
         self.statusBar.showMessage("Ready")
-
-
-    def dropEvent(self, event):
-        event_mimeData = event.mimeData()
-        # Handle event data
-        byte_array = event_mimeData.data('application/x-qabstractitemmodeldatalist')
-        dcd_data = decode_data(byte_array)[0]
-        dragged_items = []
-        if type(dcd_data) == dict:
-            for k in list(dcd_data.keys()):
-                if type(dcd_data[k].value()) == str:
-                    dragged_items.append(dcd_data[k].value())
-        # Handle drop event position in Graphics View
-        ev_pos = event.scenePos()
-        all_plot_items = self.graphicsView.ci.items
-        for item in all_plot_items:
-            coords = item.mapRectToParent(item.rect()).getCoords()
-            in_subplot = (coords[0] <= ev_pos.x() <= coords[2]) and (coords[1] <= ev_pos.y() <= coords[3])
-            if in_subplot:
-                item_cells = all_plot_items[item]
-                item_title = item.titleLabel.text
-                print("Dropped {} in {} {}.".format(dragged_items[-1], item_title, item_cells[0]))
 
 
     def runAllTests(self, tests, data, plotLast=True):

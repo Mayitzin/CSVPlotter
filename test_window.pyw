@@ -16,50 +16,49 @@ from PyQt5 import QtGui, uic, QtWidgets, QtCore
 from PyQt5.QtCore import pyqtSlot
 import pyqtgraph as pg
 
-paths = ["./data/"]
+PATHS = ["./data/"]
+COLORS = [(255, 0, 0, 255), (0, 255, 0, 255), (60, 60, 255, 255),          # Red, Green, Blue
+          (120, 0, 0, 255), (0, 100, 0, 255), (0, 0, 150, 255),            # Dark Red, Dark Green, Dark Blue
+          (215, 215, 0, 255), (150, 150, 0, 255), (125, 125, 125, 255) ]   # Yellow, Dark Yellow, Gray
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
         uic.loadUi('mainwindow_test.ui', self)
         self.splitter.setStretchFactor(1, 5)
-        self.update_tableWidget(self.tableWidget, paths)
+        self.setup_treeView(self.treeView, rootPath=PATHS[0])
+        self.update_tableWidget(self.tableWidget, PATHS)
         self.tableWidget.setDragEnabled(True)
-        max_elems = 9
-        self.all_data = random_samples(max_elems, 10)
-        gv = self.graphicsView
-        # print(type(gv))
-        gv_layout = gv.ci
-        gv.dragEnterEvent = dragEnterEvent
-        gv.addPlot(row=0, col=0, title="Data 1")
-        gv.addPlot(row=0, col=1, title="Data 2")
-        # print("Current Row:", gv_layout.currentRow)
-        # print("Current Col:", gv_layout.currentCol)
-        gv_layout.nextRow()
-        gv.addPlot(row=1, col=0, title="Data 3")
-        gv.addPlot(row=1, col=1, title="Data 4")
-        # print("Current Row:", gv_layout.currentRow)
-        # print("Current Col:", gv_layout.currentCol)
-        all_plot_items = gv_layout.items
-        # print("There are {} elements in the {} x {} Plot Widget array".format(len(all_plot_items), len(gv_layout.rows), gv_layout.currentCol))
-        for plot_item in all_plot_items:
-            plot_item.setAcceptDrops(True)
-            # plot_item.dropEvent = dropEvent
-            plot_item.dropEvent = self.dropEvent
-            # plot_item_title = plot_item.titleLabel.text
-            # print("  {} at position {}".format(plot_item_title, all_plot_items[plot_item]))
-            new_plot_data_item = pg.PlotDataItem(np.random.random(10))
-            plot_item.addItem(new_plot_data_item)
-        # print("Items:", gv_layout.items)
-        # print("Rows:", gv_layout.rows)
-        # self.tableWidget.viewport().setAcceptDrops(True)
+        self.init_graph_widget(self.graphicsView)
 
-    def widget_layout_dims(self, widget_layout):
-        # gv_layout = plot_widget.ci
-        num_rows = widget_layout.currentRow + 1
-        num_cols = widget_layout.currentCol
-        # print(" {} x {}".format(num_rows, num_cols))
-        return (num_rows, num_cols)
+    def init_graph_widget(self, graph):
+        if graph is None:
+            graph = self.graphicsView
+        gv_layout = graph.ci
+        gv_layout.clear()
+        graph.dragEnterEvent = dragEnterEvent
+        graph.addPlot()
+        for plot_item in gv_layout.items:
+            plot_item.setAcceptDrops(True)
+            plot_item.dropEvent = self.dropEvent
+
+    def setup_treeView(self, treeView, rootPath="./"):
+        model = QtWidgets.QFileSystemModel()
+        model.setRootPath(rootPath)
+        model.setNameFilters(["*.csv"])
+        model.setNameFilterDisables(False)
+        treeView.setModel(model)
+
+    @pyqtSlot(QtCore.QModelIndex)
+    def on_treeView_clicked(self):
+        indices = self.treeView.selectedIndexes()
+        if len(indices) > 0:
+            selected_file = QtWidgets.QFileSystemModel().filePath(indices[-1])
+            if selected_file.endswith(".csv"):
+                data, headers = getData(selected_file)
+                print("File: {}".format(selected_file))
+                print("  Lines: {}".format(len(data)))
+                print("  Header labels: {}".format(len(headers)))
 
     @pyqtSlot(bool)
     def on_pushButton_clicked(self):
@@ -76,83 +75,74 @@ class MainWindow(QtWidgets.QMainWindow):
         self.add_subplot_array(self.graphicsView, axis=0)
 
     def add_subplot_array(self, plot_widget, axis):
-        gv_layout = plot_widget.ci
-        num_rows = gv_layout.currentRow + 1
-        num_cols = gv_layout.currentCol
+        graph_layout = plot_widget.ci
+        num_rows = len(list(graph_layout.rows.keys()))
+        num_cols = graph_layout.currentCol
         if axis == 0:
-            gv_layout.nextRow()
+            graph_layout.nextRow()
             for col in range(num_cols):
-                plot_widget.addPlot(row=num_rows, col=col, title="Extra Row")
+                plot_widget.addPlot(row=num_rows, col=col, title=None) # Add Row
         else:
             for row in range(num_rows):
-                plot_widget.addPlot(row=row, col=num_cols, title="Extra Column")
-            gv_layout.currentCol = num_cols + 1
-        all_plot_items = gv_layout.items
-        for plot_item in all_plot_items:
+                plot_widget.addPlot(row=row, col=num_cols, title=None) # Add Column
+            graph_layout.currentCol = num_cols + 1
+        # Set Drop Events in each plot item
+        for plot_item in graph_layout.items:
             plot_item.setAcceptDrops(True)
             plot_item.dropEvent = self.dropEvent
-
-    def copy_plot_widget(self, plot_widget, scope=None):
-        print("\n----- Copying plot Widget")
-        plot_widget_layout = plot_widget.ci
-        print(type(plot_widget_layout))
-        num_rows, num_cols = self.widget_layout_dims(plot_widget_layout)
+        # Print Layout Dimensions
+        num_rows, num_cols = widget_layout_dims(graph_layout)
         print("{} x {}".format(num_rows, num_cols))
-        # New Graphics Layout
-        new_gv = pg.widgets.GraphicsLayoutWidget.GraphicsLayoutWidget()
-        plot_rows_list = list(plot_widget_layout.rows.keys())
-        # Add plots to new Graphics Layout
-        for row in plot_rows_list:
-            for col in list(range(num_cols)):
-                # new_plot_item = pg.PlotItem(title="Copied plot")
-                # new_plot_item = plot_widget_layout.getItem(row, col)
-                # print(new_plot_item, row, col)
-                # new_gv.ci.addItem(new_plot_item, row=row, col=col)
-                new_gv.addPlot(row=row, col=col, title="Copied plot")
-            if not(row == plot_rows_list[-1]):
-                new_gv.ci.nextRow()
-        # Copy plot elements
-        # all_new_items = new_gv.ci.items
-        all_old_items = plot_widget.ci.items
-        print("New items:")
-        for item in new_gv.ci.items:
-            current_row = new_gv.ci.items[item][0][0]
-            current_col = new_gv.ci.items[item][0][1]
-            print(item, ":", new_gv.ci.items[item])
-            old_item = new_gv.ci.getItem(current_row, current_col)
-            # new_gv.ci.items[old_item] = [(current_row, current_col)]
-            item = {old_item:[(current_row, current_col)]}.copy()
-            # del new_gv.ci.items[item]
-        print("Old items:")
-        for item in all_old_items:
-            print(item, ":", all_old_items[item])
-        print("New items AGAIN:")
-        for item in new_gv.ci.items:
-            print(item, ":", new_gv.ci.items[item])
-            # print(item)
-        # print("New items:", new_gv.ci.items)
-        print("------ Finishing Copy\n")
-        return new_gv
 
     @pyqtSlot(bool)
     def on_pushButton_3_clicked(self):
         """
         Remove Column from Graphics View
         """
-        print("== Remove Column ==")
-        new_graphics_view = self.copy_plot_widget(self.graphicsView)
-        new_gv_layout = new_graphics_view.ci
-        print(type(new_gv_layout))
-        num_rows, num_cols = self.widget_layout_dims(new_gv_layout)
-        print("{} x {}".format(num_rows, num_cols))
-        self.graphicsView.setCentralWidget(new_graphics_view.ci)
+        self.remove_subplot_array(self.graphicsView, axis=1)
 
     @pyqtSlot(bool)
     def on_pushButton_4_clicked(self):
         """
         Remove Row from Graphics View
         """
-        print("Push button 4 was clicked.")
+        self.remove_subplot_array(self.graphicsView, axis=0)
+
+    def remove_subplot_array(self, plot_widget, axis, index=-1):
+        graph_layout = plot_widget.ci
+        list_of_rows = sorted(list(graph_layout.rows.keys()))
+        graph_items = graph_layout.items
+        if axis == 0:
+            # Remove a row
+            if list_of_rows:
+                row_to_remove = list_of_rows[index]
+                # Remove each elements of desired row
+                for item in list(graph_items.keys()):
+                    row, col = graph_items[item][0]
+                    if row == row_to_remove:
+                        graph_layout.removeItem(item)
+                # Remove empty row from the dict 'rows'
+                if len(graph_layout.rows[row_to_remove]) < 1:
+                    del graph_layout.rows[row_to_remove]
+        else:
+            # Remove a column
+            if list_of_rows:
+                last_row = list_of_rows[-1]
+                list_of_cols = sorted(list(graph_layout.rows[last_row].keys()))
+                if list_of_cols:
+                    col_to_remove = list_of_cols[index]
+                    # Remove all items in column
+                    for item in list(graph_items.keys()):
+                        row, col = graph_items[item][0]
+                        if col == col_to_remove:
+                            graph_layout.removeItem(item)
+                    # Decrease the position of the column
+                    graph_layout.currentCol -= 1
+            else:
+                print("The Widget is empty")
+        # Print Layout Dimensions
+        num_rows, num_cols = widget_layout_dims(graph_layout)
+        print("{} x {}".format(num_rows, num_cols))
 
     def dropEvent(self, event):
         event_mimeData = event.mimeData()
@@ -167,20 +157,20 @@ class MainWindow(QtWidgets.QMainWindow):
         # Handle drop event position in Graphics View
         ev_pos = event.scenePos()
         all_plot_items = self.graphicsView.ci.items
-        for item in all_plot_items:
-            coords = item.mapRectToParent(item.rect()).getCoords()
+        for plot_item in all_plot_items:
+            coords = plot_item.mapRectToParent(plot_item.rect()).getCoords()
             in_subplot = (coords[0] <= ev_pos.x() <= coords[2]) and (coords[1] <= ev_pos.y() <= coords[3])
             if in_subplot:
-                item_cells = all_plot_items[item]
-                item_title = item.titleLabel.text
-                print("Dropped {} in {} {}.".format(dragged_items[-1], item_title, item_cells[0]))
-
+                item_cells = all_plot_items[plot_item]
+                item_title = plot_item.titleLabel.text
+                dropped_file = dragged_items[-1]
+                add_graph(plot_item, dropped_file)
 
     def plot_data(self, plotWidget, data):
         plotWidget.clear()
         plotWidget.plot(data)
         plotWidget.autoRange()
-        
+
     def update_tableWidget(self, table_widget, paths):
         found_files = getFiles(paths)
         num_files = len(found_files)
@@ -205,6 +195,25 @@ class MainWindow(QtWidgets.QMainWindow):
         table_widget.resizeColumnToContents(0)
 
 
+def widget_layout_dims(widget_layout):
+    num_rows = len(widget_layout.rows)
+    num_cols = widget_layout.currentCol
+    return (num_rows, num_cols)
+
+def add_graph(item, dropped_file):
+    """
+    Add data line to plot item
+    """
+    num_items = len(item.listDataItems())
+    color = COLORS[num_items]
+    lines = []
+    with open(dropped_file, 'r') as f:
+        read_lines = f.readlines()
+    [lines.append(line.strip().split(';')) for line in read_lines[3:]]
+    data_array = np.array(lines, dtype='float')
+    plot_data_item = pg.PlotDataItem(data_array[:,3], pen=color)
+    item.addItem(plot_data_item)
+
 def dragEnterEvent(event):
     """
     See Also
@@ -218,8 +227,13 @@ def dragEnterEvent(event):
     else:
         event.ignore()
 
-
 def decode_data(bytearray):
+    """
+    See Also
+    --------
+    - https://wiki.python.org/moin/PyQt/Handling%20Qt%27s%20internal%20item%20MIME%20type
+
+    """
     data = []
     item = {}
     ds = QtCore.QDataStream(bytearray)
@@ -259,13 +273,92 @@ def getFiles(paths):
         found_files += complete_path_files
     return found_files
 
+def isfloat(value):
+    try:
+        float(value)
+        return True
+    except ValueError:
+        return False
+
+def countHeaders(data_lines=[]):
+    row_count = 0
+    for line in data_lines:
+        elements_array = []
+        for element in line:
+            elements_array.append(isfloat(element))
+        if not all(elements_array):
+            row_count += 1
+        else:
+            break
+    return row_count
+
+def mergeHeaders(header_lines):
+    all_headers = []
+    for line in header_lines:
+        temp_header = line
+        for index in range(len(line)):
+            if len(temp_header[index]) < 1:
+                temp_header[index] = temp_header[index-1]
+        all_headers.append(temp_header)
+    new_headers = []
+    for h in list(map(list, zip(*all_headers))):
+        new_label = '_'.join(h).strip('_')
+        if new_label not in new_headers:
+            new_headers.append(new_label)
+    return new_headers
+
+def load_csv(fileName):
+    split_lines = []
+    try:
+        with open(fileName, 'r') as f:
+            read_lines = f.readlines()
+        [split_lines.append(line.strip().split(';')) for line in read_lines]
+    except:
+        print("[ERROR] Invalid file: {}".format(fileName))
+    return split_lines
+
+def getData(fileName, data_type='float'):
+    """getData reads the data stored in a CSV file, returns a numPy array of
+    its contents and a list of its headers.
+
+    fileName    is a string of the name of the requested file.
+
+    Returns:
+
+    data        is an array of the size M-by-N, where M is the number of
+                samples and N is the number of observed elements (headers or
+                columns.)
+    headers     is a list of N strings with the headers in the file.
+    """
+    data, headers = [], []
+    try:
+        read_lines = load_csv(fileName)
+        # Read and store Headers in a list of strings
+        header_rows = countHeaders(read_lines)
+        if header_rows > 1:
+            headers = mergeHeaders(read_lines[:header_rows])
+        else:
+            [headers.append(header.strip()) for header in read_lines[0]]
+        # Read and store the data in a NumPy array
+        [data.append( line ) for line in read_lines[header_rows:]]    # Skip the first N lines
+        data = np.array(data, dtype=data_type)
+    except:
+        data = np.array([], dtype=data_type)
+    return data, headers
+
+
+class Data:
+    def __init__(self, fileName):
+        self.file = fileName
+        self.data, self.headers = getData(self.file)
+        self.num_samples = len(self.data)
+        self.header_rows = countHeaders(self.lines)
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
     mainWindow = MainWindow()
     mainWindow.show()
     sys.exit(app.exec_())
-
 
 if __name__ == "__main__":
     main()

@@ -26,10 +26,48 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
         uic.loadUi('mainwindow_test.ui', self)
         self.splitter.setStretchFactor(1, 5)
-        self.setup_treeView(self.treeView, rootPath=PATHS[0])
-        self.update_tableWidget(self.tableWidget, PATHS)
+        setup_treeView(self.treeView, rootPath=PATHS[0])
         self.tableWidget.setDragEnabled(True)
         self.init_graph_widget(self.graphicsView)
+        self.active_recording = None
+
+    def update_tableWidget(self, table_widget, recording):
+        fileName = recording.file
+        if fileName.endswith(".csv"):
+            table_widget.setRowCount(recording.num_labels)
+            table_widget.setColumnCount(2)
+            for row in range(recording.num_labels):
+                item_label = QtGui.QTableWidgetItem(recording.header[row])
+                item_label.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+                table_widget.setItem(row, 0, item_label)
+            table_widget.resizeColumnToContents(0)
+
+    def dropEvent(self, event):
+        event_mimeData = event.mimeData()
+        # Handle event data
+        byte_array = event_mimeData.data('application/x-qabstractitemmodeldatalist')
+        dcd_data = decode_data(byte_array)[0]
+        dragged_items = []
+        if type(dcd_data) == dict:
+            for k in list(dcd_data.keys()):
+                if type(dcd_data[k].value()) == str:
+                    dragged_items.append(dcd_data[k].value())
+        # Handle drop event position in Graphics View
+        ev_pos = event.scenePos()
+        all_plot_items = self.graphicsView.ci.items
+        for plot_item in all_plot_items:
+            coords = plot_item.mapRectToParent(plot_item.rect()).getCoords()
+            in_subplot = (coords[0] <= ev_pos.x() <= coords[2]) and (coords[1] <= ev_pos.y() <= coords[3])
+            if in_subplot:
+                # item_cells = all_plot_items[plot_item]
+                # item_title = plot_item.titleLabel.text
+                dropped_data = dragged_items[-1]
+                if dropped_data in self.active_recording.header:
+                    index = self.active_recording.header.index(dropped_data)
+                    line_data = self.active_recording.data[:,index]
+                    add_graph(plot_item, line_data)
+                else:
+                    print("{} is NOT in Header".format(dropped_data))
 
     def init_graph_widget(self, graph):
         if graph is None:
@@ -42,23 +80,13 @@ class MainWindow(QtWidgets.QMainWindow):
             plot_item.setAcceptDrops(True)
             plot_item.dropEvent = self.dropEvent
 
-    def setup_treeView(self, treeView, rootPath="./"):
-        model = QtWidgets.QFileSystemModel()
-        model.setRootPath(rootPath)
-        model.setNameFilters(["*.csv"])
-        model.setNameFilterDisables(False)
-        treeView.setModel(model)
-
     @pyqtSlot(QtCore.QModelIndex)
     def on_treeView_clicked(self):
         indices = self.treeView.selectedIndexes()
         if len(indices) > 0:
             selected_file = QtWidgets.QFileSystemModel().filePath(indices[-1])
-            if selected_file.endswith(".csv"):
-                data, headers = getData(selected_file)
-                print("File: {}".format(selected_file))
-                print("  Lines: {}".format(len(data)))
-                print("  Header labels: {}".format(len(headers)))
+            self.active_recording = Data(selected_file)
+            self.update_tableWidget(self.tableWidget, self.active_recording)
 
     @pyqtSlot(bool)
     def on_pushButton_clicked(self):
@@ -74,25 +102,24 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         self.add_subplot_array(self.graphicsView, axis=0)
 
-    def add_subplot_array(self, plot_widget, axis):
-        graph_layout = plot_widget.ci
+    def add_subplot_array(self, graph_widget, axis):
+        graph_layout = graph_widget.ci
         num_rows = len(list(graph_layout.rows.keys()))
         num_cols = graph_layout.currentCol
         if axis == 0:
+            # Add Row
             graph_layout.nextRow()
             for col in range(num_cols):
-                plot_widget.addPlot(row=num_rows, col=col, title=None) # Add Row
+                graph_widget.addPlot(row=num_rows, col=col, title=None)
         else:
+            # Add Column
             for row in range(num_rows):
-                plot_widget.addPlot(row=row, col=num_cols, title=None) # Add Column
+                graph_widget.addPlot(row=row, col=num_cols, title=None)
             graph_layout.currentCol = num_cols + 1
         # Set Drop Events in each plot item
         for plot_item in graph_layout.items:
             plot_item.setAcceptDrops(True)
             plot_item.dropEvent = self.dropEvent
-        # Print Layout Dimensions
-        num_rows, num_cols = widget_layout_dims(graph_layout)
-        print("{} x {}".format(num_rows, num_cols))
 
     @pyqtSlot(bool)
     def on_pushButton_3_clicked(self):
@@ -116,7 +143,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Remove a row
             if list_of_rows:
                 row_to_remove = list_of_rows[index]
-                # Remove each elements of desired row
+                # Remove each element of desired row
                 for item in list(graph_items.keys()):
                     row, col = graph_items[item][0]
                     if row == row_to_remove:
@@ -140,79 +167,33 @@ class MainWindow(QtWidgets.QMainWindow):
                     graph_layout.currentCol -= 1
             else:
                 print("The Widget is empty")
-        # Print Layout Dimensions
-        num_rows, num_cols = widget_layout_dims(graph_layout)
-        print("{} x {}".format(num_rows, num_cols))
-
-    def dropEvent(self, event):
-        event_mimeData = event.mimeData()
-        # Handle event data
-        byte_array = event_mimeData.data('application/x-qabstractitemmodeldatalist')
-        dcd_data = decode_data(byte_array)[0]
-        dragged_items = []
-        if type(dcd_data) == dict:
-            for k in list(dcd_data.keys()):
-                if type(dcd_data[k].value()) == str:
-                    dragged_items.append(dcd_data[k].value())
-        # Handle drop event position in Graphics View
-        ev_pos = event.scenePos()
-        all_plot_items = self.graphicsView.ci.items
-        for plot_item in all_plot_items:
-            coords = plot_item.mapRectToParent(plot_item.rect()).getCoords()
-            in_subplot = (coords[0] <= ev_pos.x() <= coords[2]) and (coords[1] <= ev_pos.y() <= coords[3])
-            if in_subplot:
-                item_cells = all_plot_items[plot_item]
-                item_title = plot_item.titleLabel.text
-                dropped_file = dragged_items[-1]
-                add_graph(plot_item, dropped_file)
 
     def plot_data(self, plotWidget, data):
         plotWidget.clear()
         plotWidget.plot(data)
         plotWidget.autoRange()
 
-    def update_tableWidget(self, table_widget, paths):
-        found_files = getFiles(paths)
-        num_files = len(found_files)
-        table_widget.setRowCount(num_files)
-        table_widget.setColumnCount(4)
-        for row in range(num_files):
-            file_name = found_files[row]
-            item_file_name = QtGui.QTableWidgetItem( file_name )
-            item_file_name.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
-            item_num_lines = QtGui.QTableWidgetItem( str(quickCountLines(file_name)) )
-            item_num_lines.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            item_num_cols = QtGui.QTableWidgetItem( str(quickCountColumns(file_name)) )
-            item_num_cols.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            date_string = datetime.datetime.fromtimestamp(os.path.getctime(file_name)).strftime('%d.%m.%y %H:%M')
-            item_date = QtGui.QTableWidgetItem( date_string )
-            item_date.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            # Populate Row with information of file
-            table_widget.setItem(row, 0, item_file_name)
-            table_widget.setItem(row, 1, item_num_lines)
-            table_widget.setItem(row, 2, item_num_cols)
-            table_widget.setItem(row, 3, item_date)
-        table_widget.resizeColumnToContents(0)
-
+def setup_treeView(treeView, rootPath="./"):
+    model = QtWidgets.QFileSystemModel()
+    model.setRootPath(rootPath)
+    model.setNameFilters(["*.csv"])
+    model.setNameFilterDisables(False)
+    treeView.setModel(model)
 
 def widget_layout_dims(widget_layout):
     num_rows = len(widget_layout.rows)
     num_cols = widget_layout.currentCol
     return (num_rows, num_cols)
 
-def add_graph(item, dropped_file):
+def add_graph(item, data_line):
     """
     Add data line to plot item
     """
     num_items = len(item.listDataItems())
     color = COLORS[num_items]
-    lines = []
-    with open(dropped_file, 'r') as f:
-        read_lines = f.readlines()
-    [lines.append(line.strip().split(';')) for line in read_lines[3:]]
-    data_array = np.array(lines, dtype='float')
-    plot_data_item = pg.PlotDataItem(data_array[:,3], pen=color)
+    plot_data_item = pg.PlotDataItem(data_line, pen=color)
     item.addItem(plot_data_item)
+    item.autoRange()
 
 def dragEnterEvent(event):
     """
@@ -328,31 +309,31 @@ def getData(fileName, data_type='float'):
     data        is an array of the size M-by-N, where M is the number of
                 samples and N is the number of observed elements (headers or
                 columns.)
-    headers     is a list of N strings with the headers in the file.
+    header      is a list of N strings with the header labels in the file.
     """
-    data, headers = [], []
+    data, header = [], []
     try:
         read_lines = load_csv(fileName)
         # Read and store Headers in a list of strings
         header_rows = countHeaders(read_lines)
         if header_rows > 1:
-            headers = mergeHeaders(read_lines[:header_rows])
+            header = mergeHeaders(read_lines[:header_rows])
         else:
-            [headers.append(header.strip()) for header in read_lines[0]]
+            [header.append(header.strip()) for header in read_lines[0]]
         # Read and store the data in a NumPy array
         [data.append( line ) for line in read_lines[header_rows:]]    # Skip the first N lines
         data = np.array(data, dtype=data_type)
     except:
         data = np.array([], dtype=data_type)
-    return data, headers
+    return data, header
 
 
 class Data:
     def __init__(self, fileName):
         self.file = fileName
-        self.data, self.headers = getData(self.file)
+        self.data, self.header = getData(self.file)
         self.num_samples = len(self.data)
-        self.header_rows = countHeaders(self.lines)
+        self.num_labels = len(self.header)
 
 def main():
     app = QtWidgets.QApplication(sys.argv)

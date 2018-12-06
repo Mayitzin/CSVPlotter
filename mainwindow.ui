@@ -107,18 +107,12 @@
            <number>2</number>
           </property>
           <item row="0" column="0">
-           <layout class="QVBoxLayout" name="verticalLayout_2" stretch="3,3,3,1">
+           <layout class="QVBoxLayout" name="verticalLayout_2" stretch="6,1">
             <property name="spacing">
-             <number>1</number>
+             <number>0</number>
             </property>
             <item>
              <widget class="PlotWidget" name="graphicsView"/>
-            </item>
-            <item>
-             <widget class="PlotWidget" name="graphicsView_2"/>
-            </item>
-            <item>
-             <widget class="PlotWidget" name="graphicsView_3"/>
             </item>
             <item>
              <widget class="PlotWidget" name="graphicsView_7"/>
@@ -127,11 +121,11 @@
           </item>
          </layout>
         </widget>
-        <widget class="QWidget" name="tab_2">
+        <widget class="QWidget" name="tab_3">
          <attribute name="title">
-          <string>Orientation</string>
+          <string>3D View</string>
          </attribute>
-         <layout class="QGridLayout" name="gridLayout_4">
+         <layout class="QGridLayout" name="gridLayout_2">
           <property name="leftMargin">
            <number>2</number>
           </property>
@@ -144,29 +138,6 @@
           <property name="bottomMargin">
            <number>2</number>
           </property>
-          <item row="0" column="0">
-           <layout class="QVBoxLayout" name="verticalLayout_3">
-            <property name="spacing">
-             <number>1</number>
-            </property>
-            <item>
-             <widget class="PlotWidget" name="graphicsView_4"/>
-            </item>
-            <item>
-             <widget class="PlotWidget" name="graphicsView_5"/>
-            </item>
-            <item>
-             <widget class="PlotWidget" name="graphicsView_6"/>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-        <widget class="QWidget" name="tab_3">
-         <attribute name="title">
-          <string>3D View</string>
-         </attribute>
-         <layout class="QGridLayout" name="gridLayout_2">
           <item row="0" column="0">
            <widget class="PlotWidget" name="graphicsView_8"/>
           </item>
@@ -224,7 +195,7 @@
      <x>0</x>
      <y>0</y>
      <width>1366</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
   </widget>

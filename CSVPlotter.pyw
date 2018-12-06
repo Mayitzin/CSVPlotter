@@ -278,7 +278,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def setup3DWidget(self, new_widget):
-        tab_layout = self.tabWidget.widget(2).layout()
+        tab_layout = self.tabWidget.widget(1).layout()
         tab_layout.removeWidget(self.graphicsView_8)
         self.graphicsView_8.hide()
         tab_layout.addWidget(new_widget, 0, 0)
@@ -411,17 +411,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def setupPlotWidgets(self):
-        graphics_widgets = [self.graphicsView, self.graphicsView_2,
-                            self.graphicsView_3, self.graphicsView_4,
-                            self.graphicsView_5, self.graphicsView_6]
-        graphics_titles = ["Acceleration", "Angular Velocity", "Magnetic Field",
-                           "Reference Quaternions", "Computed Quaternions", "Error"]
+        graphics_widgets = [self.graphicsView]
         for index in range(len(graphics_widgets)):
             # Setup each Graphic Widget
             graphics_widgets[index].setAntialiasing(True)
             graphics_widgets[index].showAxis('bottom', False)
             graphics_widgets[index].enableAutoRange()
-            graphics_widgets[index].setTitle(graphics_titles[index])
 
         self.setupLookupGraph()
 

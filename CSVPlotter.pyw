@@ -123,6 +123,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
         uic.loadUi('mainwindow.ui', self)
         # Remove QBasicTimer error by ensuring Application quits at right time.
+        print(type(self.graphicsView))
         self.all_data, self.indices = [], []
         self.data = None
         self.all_checkables = {}
@@ -131,41 +132,107 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setupWidgets()
         self.update_tableWidget(workspace)
         self.tableWidget.setDragEnabled(True)
-        gv = self.graphicsView
-        gv.dragEnterEvent = dragEnterEvent
-        gv_layout = gv.centralWidget
-        gv_layout.setAcceptDrops(True)
-        gv_layout.dropEvent = dropEvent
+        self.init_graph_widget(self.graphicsView)
+        # gv = self.graphicsView
+        # gv.dragEnterEvent = dragEnterEvent
+        # gv_layout = gv.centralWidget
+        # gv_layout.setAcceptDrops(True)
+        # gv_layout.dropEvent = dropEvent
+        self.active_recording = None
+
+    def setup_treeView(self, treeView, rootPath="./"):
+        model = QtWidgets.QFileSystemModel()
+        model.setRootPath(rootPath)
+        model.setNameFilters(["*.csv"])
+        model.setNameFilterDisables(False)
+        treeView.setModel(model)
+
+    def update_tableWidget(self, table_widget, recording):
+        fileName = recording.file
+        if fileName.endswith(".csv"):
+            table_widget.setRowCount(recording.num_labels)
+            table_widget.setColumnCount(2)
+            for row in range(recording.num_labels):
+                item_label = QtGui.QTableWidgetItem(recording.header[row])
+                item_label.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+                table_widget.setItem(row, 0, item_label)
+            table_widget.resizeColumnToContents(0)
+
+    def dropEvent(self, event):
+        event_mimeData = event.mimeData()
+        # Handle event data
+        byte_array = event_mimeData.data('application/x-qabstractitemmodeldatalist')
+        dcd_data = decode_data(byte_array)[0]
+        dragged_items = []
+        if type(dcd_data) == dict:
+            for k in list(dcd_data.keys()):
+                if type(dcd_data[k].value()) == str:
+                    dragged_items.append(dcd_data[k].value())
+        # Handle drop event position in Graphics View
+        ev_pos = event.scenePos()
+        all_plot_items = self.graphicsView.ci.items
+        for plot_item in all_plot_items:
+            coords = plot_item.mapRectToParent(plot_item.rect()).getCoords()
+            in_subplot = (coords[0] <= ev_pos.x() <= coords[2]) and (coords[1] <= ev_pos.y() <= coords[3])
+            if in_subplot:
+                # item_cells = all_plot_items[plot_item]
+                # item_title = plot_item.titleLabel.text
+                dropped_data = dragged_items[-1]
+                if dropped_data in self.active_recording.header:
+                    index = self.active_recording.header.index(dropped_data)
+                    line_data = self.active_recording.data[:,index]
+                    add_graph(plot_item, line_data)
+                else:
+                    print("{} is NOT in Header".format(dropped_data))
+
+    def init_graph_widget(self, graph):
+        if graph is None:
+            graph = self.graphicsView
+        gv_layout = graph.ci
+        gv_layout.clear()
+        graph.dragEnterEvent = dragEnterEvent
+        graph.addPlot()
+        for plot_item in gv_layout.items:
+            plot_item.setAcceptDrops(True)
+            plot_item.dropEvent = self.dropEvent
 
     """ ========================== SIGNALED FUNCTIONS ==========================
     """
-    @pyqtSlot()
-    def on_tableWidget_itemSelectionChanged(self):
-        self.statusBar.showMessage("Reading File")
-        row = self.tableWidget.currentRow()
-        if row>-1:
-            self.file2use = self.tableWidget.item(row,0).text()
-            data = Data(self.file2use)
-            self.data = data
-            # Compute and Plot Quaternions
-            if data.num_samples>0:
-                # Update Plot Lines
-                self.updatePlots(data)
-                self.plotData(self.graphicsView_5, [])  # Estimated Quaternions
-                self.plotData(self.graphicsView_6, [])  # Errors
-                # Re-draw 3D. Reset GL Widget
-                self.new_3d_widget.deleteLater()
-                self.new_3d_widget = gl.GLViewWidget()
-                self.setup3DWidget(self.new_3d_widget)
-                self.showPlane(self.new_3d_widget)
-                self.showFrames(self.new_3d_widget, data.qts, data.pos, num_frames=10)
-                # Perform Computations with selected Algorithms
-                if len(self.readSelectedVariables(self.treeWidget))>0:
-                    tests = self.setTests()
-                    mse_errors = self.runAllTests(tests, data)
-                # Update MiniMap
-                self.updateLookupGraph(data)
-        self.statusBar.showMessage("Ready")
+    @pyqtSlot(QtCore.QModelIndex)
+    def on_treeView_clicked(self):
+        indices = self.treeView.selectedIndexes()
+        if len(indices) > 0:
+            selected_file = QtWidgets.QFileSystemModel().filePath(indices[-1])
+            self.active_recording = Data(selected_file)
+            self.update_tableWidget(self.tableWidget, self.active_recording)
+
+    # @pyqtSlot()
+    # def on_tableWidget_itemSelectionChanged(self):
+    #     self.statusBar.showMessage("Reading File")
+    #     row = self.tableWidget.currentRow()
+    #     if row>-1:
+    #         self.file2use = self.tableWidget.item(row,0).text()
+    #         data = Data(self.file2use)
+    #         self.data = data
+    #         # Compute and Plot Quaternions
+    #         if data.num_samples>0:
+    #             # Update Plot Lines
+    #             self.updatePlots(data)
+    #             self.plotData(self.graphicsView_5, [])  # Estimated Quaternions
+    #             self.plotData(self.graphicsView_6, [])  # Errors
+    #             # Re-draw 3D. Reset GL Widget
+    #             self.new_3d_widget.deleteLater()
+    #             self.new_3d_widget = gl.GLViewWidget()
+    #             self.setup3DWidget(self.new_3d_widget)
+    #             self.showPlane(self.new_3d_widget)
+    #             self.showFrames(self.new_3d_widget, data.qts, data.pos, num_frames=10)
+    #             # Perform Computations with selected Algorithms
+    #             if len(self.readSelectedVariables(self.treeWidget))>0:
+    #                 tests = self.setTests()
+    #                 mse_errors = self.runAllTests(tests, data)
+    #             # Update MiniMap
+    #             self.updateLookupGraph(data)
+    #     self.statusBar.showMessage("Ready")
 
     @pyqtSlot(QtGui.QKeyEvent)
     def on_graphicsView_keyPressEvent(self):
@@ -252,17 +319,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     child_value = tree.itemWidget(var.child(child_idx),1).value()
                     options[child_name] = child_value
         return options
-    #
-    #
-    # def quickCountLines(self, fileName):
-    #     return sum(1 for line in open(fileName))
-    #
-    #
-    # def quickCountColumns(self, fileName, separator=';'):
-    #     with open(fileName, 'r') as f:
-    #         read_line = f.readline()
-    #     return len( read_line.strip().split(separator) )
-
 
     def setupWidgets(self):
         self.splitter.setStretchFactor(1,5)
@@ -270,11 +326,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tableWidget.setHorizontalHeaderLabels(["File", "Lines", "Columns", "Created", "Notes"])
         self.plot_settings = dict.fromkeys(plotting_options, True)
         self.setupPlotWidgets()
-        self.setupOptionsTree(self.treeWidget, general_options)
-        # Setup 3D Widget
-        self.new_3d_widget = gl.GLViewWidget()
-        self.setup3DWidget(self.new_3d_widget)
-        self.showPlane(self.new_3d_widget)
+        # self.setupOptionsTree(self.treeWidget, general_options)
+        self.setup_treeView(self.treeView, rootPath="./")
+        # # Setup 3D Widget
+        # self.new_3d_widget = gl.GLViewWidget()
+        # self.setup3DWidget(self.new_3d_widget)
+        # self.showPlane(self.new_3d_widget)
 
 
     def setup3DWidget(self, new_widget):
@@ -411,13 +468,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def setupPlotWidgets(self):
-        graphics_widgets = [self.graphicsView]
-        for index in range(len(graphics_widgets)):
-            # Setup each Graphic Widget
-            graphics_widgets[index].setAntialiasing(True)
-            graphics_widgets[index].showAxis('bottom', False)
-            graphics_widgets[index].enableAutoRange()
-
+        # graphics_widgets = [self.graphicsView]
+        # for index in range(len(graphics_widgets)):
+        #     # Setup each Graphic Widget
+        #     graphics_widgets[index].setAntialiasing(True)
+        #     graphics_widgets[index].showAxis('bottom', False)
+        #     graphics_widgets[index].enableAutoRange()
         self.setupLookupGraph()
 
 
@@ -425,7 +481,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.graphicsView_7.setAntialiasing(True)
         self.graphicsView_7.showLabel('bottom', False)
         self.graphicsView_7.showLabel('left', False)
-        self.graphicsView_7.showAxis('bottom', True)
+        self.graphicsView_7.showAxis('bottom', False)
         self.graphicsView_7.showAxis('left', False)
         self.graphicsView_7.setTitle(None)
         self.graphicsView_7.setMouseEnabled(x=False, y=False)
@@ -659,9 +715,11 @@ class MainWindow(QtWidgets.QMainWindow):
 class Data:
     def __init__(self, fileName):
         self.file = fileName
-        self.data, self.headers = self.getData(self.file)
+        self.header_rows = 0
+        self.data, self.header = self.getData(self.file)
         self.num_samples = len(self.data)
-        self.header_info = self.idLabelGroups(self.headers)
+        self.num_labels = len(self.header)
+        self.header_info = self.idLabelGroups(self.header)
         self.acc, self.gyr, self.mag, self.qts, self.pos = [], [], [], [], []
         self.timestamps, self.frequencies = [], []
         self.allotData(self.data, self.header_info)

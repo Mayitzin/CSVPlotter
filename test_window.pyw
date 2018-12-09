@@ -25,6 +25,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
         uic.loadUi('mainwindow_test.ui', self)
+        print(type(self.graphicsView))
         self.splitter.setStretchFactor(1, 5)
         setup_treeView(self.treeView, rootPath=PATHS[0])
         self.tableWidget.setDragEnabled(True)

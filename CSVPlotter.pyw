@@ -22,7 +22,7 @@ workspace = [base_path]
 
 plotting_options = ["Grid-X", "Label-X", "Values-X", "Grid-Y", "Label-Y", "Values-Y", "ShowTitle"]
 # Set default List of Colors
-colors = [(255, 0, 0, 255), (0, 255, 0, 255), (60, 60, 255, 255),          # Red, Green, Blue
+COLORS = [(255, 0, 0, 255), (0, 255, 0, 255), (60, 60, 255, 255),          # Red, Green, Blue
           (120, 0, 0, 255), (0, 100, 0, 255), (0, 0, 150, 255),            # Dark Red, Dark Green, Dark Blue
           (215, 215, 0, 255), (150, 150, 0, 255), (125, 125, 125, 255) ]   # Yellow, Dark Yellow, Gray
 
@@ -95,25 +95,15 @@ def decode_data(bytearray):
         data.append(item)
     return data
 
-def dropEvent(event):
-    event_mimeData = event.mimeData()
-    # Handle event data
-    byte_array = event_mimeData.data('application/x-qabstractitemmodeldatalist')
-    dcd_data = decode_data(byte_array)[0]
-    dragged_items = []
-    if type(dcd_data) == dict:
-        for k in list(dcd_data.keys()):
-            if type(dcd_data[k].value()) == str:
-                dragged_items.append(dcd_data[k].value())
-    # Handle drop event position in Graphics View
-    ev_pos = event.scenePos()
-    # all_plot_items = self.graphicsView.ci.items
-    # list_of_items = dir(event)
-    # for item in list_of_items:
-    #     print(item)
-    print(event.widget())
-    # item_title = self.titleLabel.text
-    # print("Dropped {} in {} .".format(dragged_items[-1], item_title))
+def add_graph(item, data_line):
+    """
+    Add data line to plot item
+    """
+    num_items = len(item.listDataItems())
+    color = COLORS[num_items]
+    plot_data_item = pg.PlotDataItem(data_line, pen=color)
+    item.addItem(plot_data_item)
+    item.autoRange()
 
 all_labels = json2dict('labels.dat')
 general_options = json2dict('data_options.dat')
@@ -130,7 +120,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.file2use = ""
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setupWidgets()
-        self.update_tableWidget(workspace)
         self.tableWidget.setDragEnabled(True)
         self.init_graph_widget(self.graphicsView)
         # gv = self.graphicsView
@@ -200,11 +189,14 @@ class MainWindow(QtWidgets.QMainWindow):
     """
     @pyqtSlot(QtCore.QModelIndex)
     def on_treeView_clicked(self):
+        print("TreeView clicked")
         indices = self.treeView.selectedIndexes()
         if len(indices) > 0:
-            selected_file = QtWidgets.QFileSystemModel().filePath(indices[-1])
-            self.active_recording = Data(selected_file)
-            self.update_tableWidget(self.tableWidget, self.active_recording)
+            selected_path = QtWidgets.QFileSystemModel().filePath(indices[-1])
+            if os.path.isfile(selected_path):
+                print("Selected file: {}".format(selected_path))
+                self.active_recording = Data(selected_path)
+                self.update_tableWidget(self.tableWidget, self.active_recording)
 
     # @pyqtSlot()
     # def on_tableWidget_itemSelectionChanged(self):
@@ -523,27 +515,27 @@ class MainWindow(QtWidgets.QMainWindow):
             self.updatePlots(data, ROI)
 
 
-    def update_tableWidget(self, workspace):
-        found_files = self.getFiles(workspace)
-        num_files = len(found_files)
-        self.tableWidget.setRowCount(num_files)
-        for row in range(num_files):
-            file_name = found_files[row]
-            item_file_name = QtGui.QTableWidgetItem( file_name )
-            item_file_name.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
-            item_num_lines = QtGui.QTableWidgetItem( str(quickCountLines(file_name)) )
-            item_num_lines.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            item_num_cols = QtGui.QTableWidgetItem( str(quickCountColumns(file_name)) )
-            item_num_cols.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            date_string = datetime.datetime.fromtimestamp(os.path.getctime(file_name)).strftime('%d.%m.%y %H:%M')
-            item_date = QtGui.QTableWidgetItem( date_string )
-            item_date.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            # Populate Row with information of file
-            self.tableWidget.setItem(row, 0, item_file_name)
-            self.tableWidget.setItem(row, 1, item_num_lines)
-            self.tableWidget.setItem(row, 2, item_num_cols)
-            self.tableWidget.setItem(row, 3, item_date)
-        self.tableWidget.resizeColumnToContents(0)
+    # def update_tableWidget(self, workspace):
+    #     found_files = self.getFiles(workspace)
+    #     num_files = len(found_files)
+    #     self.tableWidget.setRowCount(num_files)
+    #     for row in range(num_files):
+    #         file_name = found_files[row]
+    #         item_file_name = QtGui.QTableWidgetItem( file_name )
+    #         item_file_name.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+    #         item_num_lines = QtGui.QTableWidgetItem( str(quickCountLines(file_name)) )
+    #         item_num_lines.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+    #         item_num_cols = QtGui.QTableWidgetItem( str(quickCountColumns(file_name)) )
+    #         item_num_cols.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+    #         date_string = datetime.datetime.fromtimestamp(os.path.getctime(file_name)).strftime('%d.%m.%y %H:%M')
+    #         item_date = QtGui.QTableWidgetItem( date_string )
+    #         item_date.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+    #         # Populate Row with information of file
+    #         self.tableWidget.setItem(row, 0, item_file_name)
+    #         self.tableWidget.setItem(row, 1, item_num_lines)
+    #         self.tableWidget.setItem(row, 2, item_num_cols)
+    #         self.tableWidget.setItem(row, 3, item_date)
+    #     self.tableWidget.resizeColumnToContents(0)
 
 
     def getFiles(self, workspace):
